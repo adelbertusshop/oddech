@@ -6,6 +6,7 @@
     <title>ODDECH - Dość bycia wydymanym</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background: #0a0a0a; color: #ddd; }
         .card { transition: all 0.3s; }
@@ -123,23 +124,45 @@
     </footer>
 
     <script>
+        const SUPABASE_URL = 'https://ofsxuoujixgndkbavlim.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_VqLAfNEa1f3y-tINO7OYpA_KmtqCO4r';
+        const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let currentUser = null;
         let expenses = [];
 
-        function loadExpenses() {
-            const saved = localStorage.getItem('oddech_expenses');
-            if (saved) {
-                expenses = JSON.parse(saved);
-            } else {
-                expenses = [];
+        async function checkUser() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                currentUser = session.user;
+                await loadExpenses();
             }
+        }
+
+        async function loadExpenses() {
+            if (!currentUser) return;
+            
+            const { data, error } = await supabase
+                .from('expenses')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('Błąd ładowania:', error);
+                return;
+            }
+            
+            expenses = data || [];
             renderExpenses();
         }
 
-        function saveExpenses() {
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
-        }
-
-        function addExpense() {
+        async function addExpense() {
+            if (!currentUser) {
+                alert('Zaloguj się najpierw!');
+                return;
+            }
+            
             const amountInput = document.getElementById('expenseAmount');
             const descInput = document.getElementById('expenseDesc');
             
@@ -158,16 +181,24 @@
             
             amount = Math.round(amount * 100) / 100;
             
-            const expense = {
-                id: Date.now().toString(),
-                amount: amount,
-                description: description,
-                date: new Date().toISOString()
-            };
+            const { data, error } = await supabase
+                .from('expenses')
+                .insert([{
+                    amount: amount,
+                    description: description,
+                    user_id: currentUser.id
+                }])
+                .select();
             
-            expenses.unshift(expense);
-            saveExpenses();
-            renderExpenses();
+            if (error) {
+                alert('Błąd zapisu: ' + error.message);
+                return;
+            }
+            
+            if (data) {
+                expenses.unshift(data[0]);
+                renderExpenses();
+            }
             
             amountInput.value = '';
             descInput.value = '';
@@ -191,12 +222,21 @@
             setTimeout(() => toast.remove(), 3000);
         }
         
-        function deleteExpense(id) {
-            if (confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) {
-                expenses = expenses.filter(e => e.id !== id);
-                saveExpenses();
-                renderExpenses();
+        async function deleteExpense(id) {
+            if (!confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) return;
+            
+            const { error } = await supabase
+                .from('expenses')
+                .delete()
+                .eq('id', id);
+            
+            if (error) {
+                alert('Błąd usuwania: ' + error.message);
+                return;
             }
+            
+            expenses = expenses.filter(e => e.id !== id);
+            renderExpenses();
         }
         
         function renderExpenses() {
@@ -204,7 +244,7 @@
             const totalSpan = document.getElementById('totalAmount');
             const totalBottom = document.getElementById('totalAmountBottom');
             
-            const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const total = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
             totalSpan.innerText = total.toFixed(2) + ' zł';
             if (totalBottom) totalBottom.innerText = total.toFixed(2) + ' zł';
             
@@ -216,9 +256,9 @@
             container.innerHTML = expenses.map(exp => `
                 <div class="bg-black/40 rounded-xl p-4 border-l-4 border-red-500 flex justify-between items-center hover:bg-zinc-800/50 transition">
                     <div class="flex-1">
-                        <div class="font-bold text-white">-${exp.amount.toFixed(2)} zł</div>
-                        <div class="text-sm text-zinc-500">${escapeHtml(exp.description)}</div>
-                        <div class="text-xs text-zinc-600">${new Date(exp.date).toLocaleString('pl-PL')}</div>
+                        <div class="font-bold text-white">-${(exp.amount || 0).toFixed(2)} zł</div>
+                        <div class="text-sm text-zinc-500">${escapeHtml(exp.description || '')}</div>
+                        <div class="text-xs text-zinc-600">${new Date(exp.created_at).toLocaleString('pl-PL')}</div>
                     </div>
                     <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-4">
                         <i class="fas fa-skull text-xl"></i>
@@ -237,10 +277,20 @@
             });
         }
         
-        function resetExpenses() {
+        async function resetExpenses() {
+            if (!currentUser) return;
             if (confirm('RESETUJESZ WSZYSTKIE WYDATKI.\n\nJesteś pewien? To jak wymazać swoje grzechy finansowe.\n(ale od czegoś trzeba zacząć)')) {
+                const { error } = await supabase
+                    .from('expenses')
+                    .delete()
+                    .eq('user_id', currentUser.id);
+                
+                if (error) {
+                    alert('Błąd resetu: ' + error.message);
+                    return;
+                }
+                
                 expenses = [];
-                saveExpenses();
                 renderExpenses();
                 const toast = document.createElement('div');
                 toast.className = 'fixed top-24 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 font-bold';
@@ -250,7 +300,7 @@
             }
         }
         
-        loadExpenses();
+        checkUser();
         
         document.getElementById('expenseAmount')?.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') addExpense();
