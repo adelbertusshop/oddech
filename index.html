@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ODDECH - Dość bycia wydymanym</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        body { background: #0a0a0a; color: #ddd; }
+        .card { transition: all 0.3s; }
+        .card:hover { transform: translateY(-4px); border-color: #10b981; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <nav class="border-b border-zinc-800 bg-black/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center">
+                    <i class="fas fa-bolt text-black text-xl"></i>
+                </div>
+                <h1 class="text-3xl font-bold tracking-tighter">ODDECH</h1>
+            </div>
+            <div class="text-emerald-500 font-medium">v0.1 • FREE</div>
+        </div>
+    </nav>
 
+    <main class="max-w-6xl mx-auto px-6 py-16">
+        <div class="text-center mb-20">
+            <h2 class="text-6xl font-bold leading-none mb-6">
+                Dość bycia<br>
+                <span class="text-red-500">wydymanym codziennie</span>
+            </h2>
+            <p class="text-xl text-zinc-400 max-w-xl mx-auto">
+                Prosta, brutalna apka która pilnuje Twoich pieniędzy i zabija codzienny stres.
+            </p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="card bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
+                <i class="fas fa-wallet text-4xl text-emerald-500 mb-6"></i>
+                <h3 class="text-2xl font-semibold mb-3">Tracker Wydatków</h3>
+                <p class="text-zinc-500">Dodawaj wydatki. Widzisz gdzie wycieka kasa.</p>
+            </div>
+            
+            <div class="card bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
+                <i class="fas fa-shield-alt text-4xl text-emerald-500 mb-6"></i>
+                <h3 class="text-2xl font-semibold mb-3">Killer Pierdół</h3>
+                <p class="text-zinc-500">Parkingi, urzędy, kolejki — rozwiązania na już.</p>
+            </div>
+            
+            <div class="card bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
+                <i class="fas fa-brain text-4xl text-emerald-500 mb-6"></i>
+                <h3 class="text-2xl font-semibold mb-3">Mental Reset</h3>
+                <p class="text-zinc-500">Brutalne alerty kiedy scrollujesz jak debil.</p>
+            </div>
+        </div>
+
+        <div class="mt-20 text-center">
+            <button onclick="addExpense()" 
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl text-lg font-semibold">
+                + Dodaj wydatek (test)
+            </button>
+        </div>
+    </main>
+
+    <script>
+        function addExpense() {
+            const amount = prompt("Ile wydałeś? (np. 45.50)");
+            if (amount) {
+                alert(`Zapisano wydatek: ${amount} zł\n\n(To jest test. Później będzie szło do Supabase)`);
+            }
+        }
+    </script>
+</body>
+</html>
