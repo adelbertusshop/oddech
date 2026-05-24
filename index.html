@@ -45,22 +45,26 @@
                     <h3 class="text-2xl font-semibold">Tracker Wydatków</h3>
                 </div>
                 
-                <div class="mb-6">
-                    <div class="bg-black/50 rounded-2xl p-4 mb-4">
-                        <div class="text-zinc-500 text-sm uppercase tracking-wide">Wydane dzisiaj</div>
-                        <div class="text-4xl font-bold text-red-500" id="totalAmount">0.00 zł</div>
-                    </div>
-                    
-                    <div class="space-y-3 mb-6">
-                        <input type="number" id="expenseAmount" placeholder="Kwota (zł)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
-                        <input type="text" id="expenseDesc" placeholder="Za co? (np. kebs, paliwo, pierdoły)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
-                        <button onclick="addExpense()" class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
-                            <i class="fas fa-skull-crossbones mr-2"></i> DODAJ WYDATEK
-                        </button>
-                    </div>
-                    
-                    <div class="max-h-80 overflow-y-auto space-y-2" id="expensesList">
-                        <div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się!</div>
+                <div id="authSection" class="mb-6"></div>
+                
+                <div id="expenseTracker" style="display: none;">
+                    <div class="mb-6">
+                        <div class="bg-black/50 rounded-2xl p-4 mb-4">
+                            <div class="text-zinc-500 text-sm uppercase tracking-wide">Wydane dzisiaj</div>
+                            <div class="text-4xl font-bold text-red-500" id="totalAmount">0.00 zł</div>
+                        </div>
+                        
+                        <div class="space-y-3 mb-6">
+                            <input type="number" id="expenseAmount" placeholder="Kwota (zł)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                            <input type="text" id="expenseDesc" placeholder="Za co? (np. kebs, paliwo, pierdoły)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                            <button onclick="addExpense()" class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
+                                <i class="fas fa-skull-crossbones mr-2"></i> DODAJ WYDATEK
+                            </button>
+                        </div>
+                        
+                        <div class="max-h-80 overflow-y-auto space-y-2" id="expensesList">
+                            <div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się!</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -84,7 +88,7 @@
                     <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5">
                         <i class="fas fa-clock text-red-500 text-2xl mb-2 block"></i>
                         <h4 class="font-bold text-lg mb-1">Kolejki do lekarza</h4>
-                        <p class="text-zinc-400 text-sm">Telemedycyna, recepty online, prywatne pakiet za 50 zł/mc. Twoje zdrowie > czekanie 3 miesiące.</p>
+                        <p class="text-zinc-400 text-sm">Telemedycyna, recepty online, prywatny pakiet za 50 zł/mc. Twoje zdrowie > czekanie 3 miesiące.</p>
                     </div>
                     <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-center">
                         <i class="fas fa-dumbbell text-emerald-500 text-3xl mb-2 block"></i>
@@ -95,7 +99,7 @@
             </div>
         </div>
 
-        <div class="text-center space-y-4">
+        <div class="text-center space-y-4" id="resetSection" style="display: none;">
             <button onclick="resetExpenses()" class="brutal-btn bg-red-600/20 hover:bg-red-600/30 text-red-500 px-8 py-3 rounded-xl font-semibold border border-red-500/30">
                 <i class="fas fa-trash-alt mr-2"></i> RESETUJ WSZYSTKO (tylko dla twardzieli)
             </button>
@@ -122,24 +126,118 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        const SUPABASE_URL = 'https://ofsxuoujixgndkbavlim.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_VqLAfNEa1f3y-tINO7OYpA_KmtqCO4r';
+        const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        let currentUser = null;
         let expenses = [];
 
-        function loadExpenses() {
-            const saved = localStorage.getItem('oddech_expenses');
-            if (saved) {
-                expenses = JSON.parse(saved);
+        async function checkUser() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                currentUser = session.user;
+                showExpenseTracker();
+                await loadExpenses();
             } else {
-                expenses = [];
+                showLoginButton();
             }
+        }
+
+        function showLoginButton() {
+            const authSection = document.getElementById('authSection');
+            authSection.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-skull text-5xl text-red-500 mb-4 block"></i>
+                    <p class="text-zinc-400 mb-6">Zaloguj się żeby śledzić swoje grzechy finansowe</p>
+                    <button onclick="loginWithGoogle()" class="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-xl font-semibold w-full">
+                        <i class="fab fa-google mr-2"></i> ZALOGUJ PRZEZ GOOGLE
+                    </button>
+                    <div class="my-4 text-zinc-600">lub</div>
+                    <button onclick="loginWithEmail()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-semibold w-full">
+                        <i class="fas fa-envelope mr-2"></i> ZALOGUJ PRZEZ EMAIL
+                    </button>
+                </div>
+            `;
+            document.getElementById('expenseTracker').style.display = 'none';
+            document.getElementById('resetSection').style.display = 'none';
+        }
+
+        window.loginWithGoogle = async function() {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google'
+            });
+            if (error) alert('Błąd logowania: ' + error.message);
+        }
+
+        window.loginWithEmail = async function() {
+            const email = prompt('Podaj email:');
+            if (!email) return;
+            const { error } = await supabase.auth.signInWithOtp({
+                email: email,
+                options: {
+                    shouldCreateUser: true,
+                }
+            });
+            if (error) {
+                alert('Błąd: ' + error.message);
+            } else {
+                alert('Link magiczny wysłany na ' + email + '. Sprawdź skrzynkę!');
+            }
+        }
+
+        async function logout() {
+            await supabase.auth.signOut();
+            currentUser = null;
+            expenses = [];
+            showLoginButton();
+        }
+
+        function showExpenseTracker() {
+            const authSection = document.getElementById('authSection');
+            authSection.innerHTML = `
+                <div class="bg-black/50 rounded-2xl p-4 mb-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <i class="fas fa-user-check text-emerald-500 mr-2"></i>
+                            <span class="font-bold">${currentUser?.email || currentUser?.user_metadata?.full_name || 'Wojownik'}</span>
+                        </div>
+                        <button onclick="logout()" class="text-red-500 hover:text-red-400 text-sm">
+                            <i class="fas fa-sign-out-alt mr-1"></i> WYJDŹ
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('expenseTracker').style.display = 'block';
+            document.getElementById('resetSection').style.display = 'block';
+        }
+
+        async function loadExpenses() {
+            if (!currentUser) return;
+            
+            const { data, error } = await supabase
+                .from('expenses')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .order('created_at', { ascending: false });
+            
+            if (error) {
+                console.error('Błąd ładowania:', error);
+                return;
+            }
+            
+            expenses = data || [];
             renderExpenses();
         }
 
-        function saveExpenses() {
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
-        }
-
-        function addExpense() {
+        window.addExpense = async function() {
+            if (!currentUser) {
+                alert('Zaloguj się najpierw!');
+                return;
+            }
+            
             const amountInput = document.getElementById('expenseAmount');
             const descInput = document.getElementById('expenseDesc');
             
@@ -158,20 +256,27 @@
             
             amount = Math.round(amount * 100) / 100;
             
-            const expense = {
-                id: Date.now().toString(),
-                amount: amount,
-                description: description,
-                date: new Date().toISOString()
-            };
+            const { data, error } = await supabase
+                .from('expenses')
+                .insert([{
+                    amount: amount,
+                    description: description,
+                    user_id: currentUser.id
+                }])
+                .select();
             
-            expenses.unshift(expense);
-            saveExpenses();
-            renderExpenses();
+            if (error) {
+                alert('Błąd zapisu: ' + error.message);
+                return;
+            }
+            
+            if (data) {
+                expenses.unshift(data[0]);
+                renderExpenses();
+            }
             
             amountInput.value = '';
             descInput.value = '';
-            
             showBrutalFeedback(amount, description);
         }
         
@@ -191,12 +296,21 @@
             setTimeout(() => toast.remove(), 3000);
         }
         
-        function deleteExpense(id) {
-            if (confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) {
-                expenses = expenses.filter(e => e.id !== id);
-                saveExpenses();
-                renderExpenses();
+        window.deleteExpense = async function(id) {
+            if (!confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) return;
+            
+            const { error } = await supabase
+                .from('expenses')
+                .delete()
+                .eq('id', id);
+            
+            if (error) {
+                alert('Błąd usuwania: ' + error.message);
+                return;
             }
+            
+            expenses = expenses.filter(e => e.id !== id);
+            renderExpenses();
         }
         
         function renderExpenses() {
@@ -204,7 +318,7 @@
             const totalSpan = document.getElementById('totalAmount');
             const totalBottom = document.getElementById('totalAmountBottom');
             
-            const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const total = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
             totalSpan.innerText = total.toFixed(2) + ' zł';
             if (totalBottom) totalBottom.innerText = total.toFixed(2) + ' zł';
             
@@ -216,9 +330,9 @@
             container.innerHTML = expenses.map(exp => `
                 <div class="bg-black/40 rounded-xl p-4 border-l-4 border-red-500 flex justify-between items-center hover:bg-zinc-800/50 transition">
                     <div class="flex-1">
-                        <div class="font-bold text-white">-${exp.amount.toFixed(2)} zł</div>
-                        <div class="text-sm text-zinc-500">${escapeHtml(exp.description)}</div>
-                        <div class="text-xs text-zinc-600">${new Date(exp.date).toLocaleString('pl-PL')}</div>
+                        <div class="font-bold text-white">-${(exp.amount || 0).toFixed(2)} zł</div>
+                        <div class="text-sm text-zinc-500">${escapeHtml(exp.description || '')}</div>
+                        <div class="text-xs text-zinc-600">${new Date(exp.created_at).toLocaleString('pl-PL')}</div>
                     </div>
                     <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-4">
                         <i class="fas fa-skull text-xl"></i>
@@ -237,26 +351,37 @@
             });
         }
         
-        function resetExpenses() {
-            if (confirm('RESETUJESZ WSZYSTKIE WYDATKI.\n\nJesteś pewien? To jak wymazać swoje grzechy finansowe.\n(ale od czegoś trzeba zacząć)')) {
-                expenses = [];
-                saveExpenses();
-                renderExpenses();
-                const toast = document.createElement('div');
-                toast.className = 'fixed top-24 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 font-bold';
-                toast.innerHTML = '<i class="fas fa-fire mr-2"></i> WYPIERDOLONE. ZERRO. ZACZYNASZ OD NOWA.';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2500);
+        window.resetExpenses = async function() {
+            if (!currentUser) return;
+            if (!confirm('RESETUJESZ WSZYSTKIE WYDATKI.\n\nJesteś pewien? To jak wymazać swoje grzechy finansowe.\n(ale od czegoś trzeba zacząć)')) return;
+            
+            const { error } = await supabase
+                .from('expenses')
+                .delete()
+                .eq('user_id', currentUser.id);
+            
+            if (error) {
+                alert('Błąd resetu: ' + error.message);
+                return;
             }
+            
+            expenses = [];
+            renderExpenses();
+            
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-24 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 font-bold';
+            toast.innerHTML = '<i class="fas fa-fire mr-2"></i> WYPIERDOLONE. ZERRO. ZACZYNASZ OD NOWA.';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
         }
         
-        loadExpenses();
+        checkUser();
         
         document.getElementById('expenseAmount')?.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') addExpense();
+            if (e.key === 'Enter') window.addExpense();
         });
         document.getElementById('expenseDesc')?.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') addExpense();
+            if (e.key === 'Enter') window.addExpense();
         });
     </script>
 </body>
