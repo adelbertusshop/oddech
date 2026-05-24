@@ -6,6 +6,7 @@
     <title>ODDECH - Dość bycia wydymanym</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { background: #0a0a0a; color: #ddd; }
         .card { transition: all 0.3s; }
@@ -45,7 +46,7 @@
                     <h3 class="text-2xl font-semibold">Tracker Wydatków</h3>
                 </div>
                 
-                <div id="authSection" class="mb-6"></div>
+                <div id="authSection"></div>
                 
                 <div id="expenseTracker" style="display: none;">
                     <div class="mb-6">
@@ -126,7 +127,6 @@
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         const SUPABASE_URL = 'https://ofsxuoujixgndkbavlim.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_VqLAfNEa1f3y-tINO7OYpA_KmtqCO4r';
@@ -152,10 +152,9 @@
                 <div class="text-center py-8">
                     <i class="fas fa-skull text-5xl text-red-500 mb-4 block"></i>
                     <p class="text-zinc-400 mb-6">Zaloguj się żeby śledzić swoje grzechy finansowe</p>
-                    <button onclick="loginWithGoogle()" class="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-xl font-semibold w-full">
+                    <button onclick="loginWithGoogle()" class="bg-red-600 hover:bg-red-500 text-white px-8 py-3 rounded-xl font-semibold w-full mb-3">
                         <i class="fab fa-google mr-2"></i> ZALOGUJ PRZEZ GOOGLE
                     </button>
-                    <div class="my-4 text-zinc-600">lub</div>
                     <button onclick="loginWithEmail()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-semibold w-full">
                         <i class="fas fa-envelope mr-2"></i> ZALOGUJ PRZEZ EMAIL
                     </button>
@@ -284,8 +283,8 @@
             const messages = [
                 `Kolejne ${amount} zł wyjebane w ${description}. Idziesz na dno czy ogarniesz się w końcu?`,
                 `${amount} zł mniej. ${description}? Naprawdę? Twoja stara miałaby rację.`,
-                `Wydałeś ${amount} zł na ${description}. Twoje konto płacze. Twoje przyszłe ja cię nienawidzi.`,
-                `*BRUTALNY DŹWIĘK TRĄBKI* ${amount} zł poszło. ${description}. Zastanów się chwilę.`,
+                `Wydałeś ${amount} zł na ${description}. Twoje konto płacze.`,
+                `*BRUTALNY DŹWIĘK TRĄBKI* ${amount} zł poszło. ${description}. Zastanów się.`,
                 `Nie no spoko, wydawaj dalej. ${amount} zł na ${description}. Mega opłacalne.`
             ];
             const randomMsg = messages[Math.floor(Math.random() * messages.length)];
@@ -297,7 +296,7 @@
         }
         
         window.deleteExpense = async function(id) {
-            if (!confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) return;
+            if (!confirm('Usunąć ten wpierdol finansowy?')) return;
             
             const { error } = await supabase
                 .from('expenses')
@@ -323,7 +322,7 @@
             if (totalBottom) totalBottom.innerText = total.toFixed(2) + ' zł';
             
             if (expenses.length === 0) {
-                container.innerHTML = '<div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się kurwa!</div>';
+                container.innerHTML = '<div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się!</div>';
                 return;
             }
             
@@ -353,7 +352,7 @@
         
         window.resetExpenses = async function() {
             if (!currentUser) return;
-            if (!confirm('RESETUJESZ WSZYSTKIE WYDATKI.\n\nJesteś pewien? To jak wymazać swoje grzechy finansowe.\n(ale od czegoś trzeba zacząć)')) return;
+            if (!confirm('RESETUJESZ WSZYSTKIE WYDATKI. Jesteś pewien?')) return;
             
             const { error } = await supabase
                 .from('expenses')
