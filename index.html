@@ -1,166 +1,440 @@
+
 <!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ODDECH - Dość bycia wydymanym</title>
+    <title>ODDECH 2.0 — Dość bycia wydymanym</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <style>
-        body { background: #0a0a0a; color: #ddd; }
-        .card { transition: all 0.3s; }
+        body { background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .card:hover { transform: translateY(-4px); border-color: #10b981; }
-        .brutal-btn { transition: all 0.2s; }
+        .brutal-btn { transition: all 0.15s; }
         .brutal-btn:active { transform: scale(0.96); }
+        .glass { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(12px); }
+        .gradient-text { background: linear-gradient(135deg, #10b981, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .janusz-alert { animation: pulse-red 2s infinite; }
+        .slide-in { animation: slideIn 0.4s ease-out; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .progress-ring { transition: stroke-dashoffset 0.5s ease; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .expense-item { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body class="min-h-screen">
-    <nav class="border-b border-zinc-800 bg-black/80 backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
+    <!-- NAV -->
+    <nav class="border-b border-zinc-800 bg-black/90 backdrop-blur-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <div class="w-9 h-9 bg-emerald-500 rounded-2xl flex items-center justify-center">
-                    <i class="fas fa-bolt text-black text-xl"></i>
+                <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <i class="fas fa-bolt text-black text-lg font-bold"></i>
                 </div>
-                <h1 class="text-3xl font-bold tracking-tighter">ODDECH</h1>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tighter">ODDECH <span class="text-emerald-500">2.0</span></h1>
+                    <p class="text-xs text-zinc-500 -mt-1">Dość bycia wydymanym</p>
+                </div>
             </div>
-            <div class="text-emerald-500 font-medium">v1.0 • FREE</div>
+            <div class="flex items-center gap-4">
+                <div class="hidden sm:flex items-center gap-2 bg-zinc-900 rounded-xl px-4 py-2 border border-zinc-800">
+                    <i class="fas fa-user-secret text-emerald-500"></i>
+                    <span class="text-sm text-zinc-400">ID:</span>
+                    <span id="userIdDisplay" class="text-sm font-mono text-emerald-400">...</span>
+                </div>
+                <button onclick="showSettings()" class="brutal-btn w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center border border-zinc-700">
+                    <i class="fas fa-cog text-zinc-400"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
-    <main class="max-w-6xl mx-auto px-6 py-16">
-        <div class="text-center mb-20">
-            <h2 class="text-6xl font-bold leading-none mb-6">
-                Dość bycia<br>
-                <span class="text-red-500">wydymanym codziennie</span>
-            </h2>
-            <p class="text-xl text-zinc-400 max-w-xl mx-auto">
-                Prosta, brutalna apka która pilnuje Twoich pieniędzy i zabija codzienny stres.
-            </p>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        <!-- HERO STATS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full -mr-8 -mt-8"></div>
+                <div class="text-zinc-500 text-sm uppercase tracking-wider mb-2">Wydane dzisiaj</div>
+                <div class="text-4xl font-bold text-red-500" id="totalToday">0.00 zł</div>
+                <div class="text-sm text-zinc-600 mt-2" id="todayCount">0 transakcji</div>
+            </div>
+            <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-8 -mt-8"></div>
+                <div class="text-zinc-500 text-sm uppercase tracking-wider mb-2">Zaoszczędzono (wyzwania)</div>
+                <div class="text-4xl font-bold text-emerald-500" id="totalSaved">0.00 zł</div>
+                <div class="text-sm text-zinc-600 mt-2" id="activeChallenges">0 aktywnych wyzwań</div>
+            </div>
+            <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-8 -mt-8"></div>
+                <div class="text-zinc-500 text-sm uppercase tracking-wider mb-2">Stawka Wolności</div>
+                <div class="text-4xl font-bold text-blue-400" id="avgHoursToday">0h</div>
+                <div class="text-sm text-zinc-600 mt-2">średnio na transakcję</div>
+            </div>
         </div>
 
-        <div class="grid md:grid-cols-2 gap-8 mb-20">
-            <div class="card bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <div class="flex items-center gap-3 mb-6">
-                    <i class="fas fa-wallet text-4xl text-emerald-500"></i>
-                    <h3 class="text-2xl font-semibold">Tracker Wydatków</h3>
+        <!-- JANUSZ ALERT -->
+        <div id="januszAlert" class="hidden mb-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-5 janusz-alert">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
                 </div>
-                
-                <div class="mb-6">
-                    <div class="bg-black/50 rounded-2xl p-4 mb-4">
-                        <div class="text-zinc-500 text-sm uppercase tracking-wide">Wydane dzisiaj</div>
-                        <div class="text-4xl font-bold text-red-500" id="totalAmount">0.00 zł</div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-red-400 text-lg mb-1">🚨 JANUSZ ALERT</h3>
+                    <p id="januszMessage" class="text-zinc-300 text-sm"></p>
+                </div>
+                <button onclick="dismissJanusz()" class="text-zinc-500 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-6">
+            <!-- LEFT COLUMN: ADD EXPENSE + LIST -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- ADD EXPENSE -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-wallet text-emerald-500"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">Nowy Wydatek</h3>
                     </div>
                     
-                    <div class="space-y-3 mb-6">
-                        <input type="number" id="expenseAmount" placeholder="Kwota (zł)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
-                        <input type="text" id="expenseDesc" placeholder="Za co? (np. kebs, paliwo, pierdoły)" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
-                        <select id="expenseCategory" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
-                            <option value="Jedzenie">🍔 Jedzenie</option>
-                            <option value="Transport">🚗 Transport</option>
-                            <option value="Rachunki">💡 Rachunki</option>
+                    <div class="grid sm:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Kwota (zł)</label>
+                            <input type="number" id="expenseAmount" step="0.01" placeholder="0.00" 
+                                class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-emerald-500 transition">
+                        </div>
+                        <div>
+                            <label class="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Kategoria</label>
+                            <select id="expenseCategory" 
+                                class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition">
+                                <option value="Jedzenie">🍔 Jedzenie</option>
+                                <option value="Transport">🚗 Transport</option>
+                                <option value="Rachunki">💡 Rachunki</option>
+                                <option value="Rozrywka">🎮 Rozrywka</option>
+                                <option value="Zdrowie">💊 Zdrowie</option>
+                                <option value="Ubrania">👕 Ubrania</option>
+                                <option value="Palenie">🚬 Palenie</option>
+                                <option value="Inne">💩 Inne</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="text-xs text-zinc-500 uppercase tracking-wider mb-2 block">Za co? (bądź szczery)</label>
+                        <input type="text" id="expenseDesc" placeholder="np. kebs, paliwo, pierdoły..." 
+                            class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition">
+                    </div>
+                    
+                    <button onclick="addExpense()" 
+                        class="brutal-btn w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold py-4 rounded-xl text-lg shadow-lg shadow-emerald-500/20">
+                        <i class="fas fa-skull-crossbones mr-2"></i> DODAJ WYDATEK
+                    </button>
+                </div>
+
+                <!-- CHART: COMPARISON -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold">📊 Ty Teraz vs Ty Miesiąc Temu</h3>
+                        <span class="text-xs text-zinc-500">Ostatnie 30 dni</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- EXPENSES LIST -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold">📝 Historia Wydatków</h3>
+                        <div class="flex gap-2">
+                            <button onclick="filterExpenses('all')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn active" data-filter="all">Wszystko</button>
+                            <button onclick="filterExpenses('today')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn" data-filter="today">Dziś</button>
+                            <button onclick="filterExpenses('week')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn" data-filter="week">Tydzień</button>
+                        </div>
+                    </div>
+                    <div class="max-h-96 overflow-y-auto space-y-2" id="expensesList">
+                        <div class="text-center text-zinc-600 py-12">
+                            <i class="fas fa-ghost text-4xl mb-3 opacity-30"></i>
+                            <p>Brak wydatków. Trzymaj się!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: CHALLENGES + TOOLS -->
+            <div class="space-y-6">
+                <!-- STAWKA WOLNOŚCI -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-clock text-blue-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold">⏱️ Stawka Wolności</h3>
+                    </div>
+                    <div class="bg-black/50 rounded-xl p-4 mb-4">
+                        <div class="text-zinc-500 text-xs uppercase mb-1">Twoja stawka godzinowa</div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="hourlyRate" value="25" step="0.5" 
+                                class="bg-transparent text-2xl font-bold text-white w-24 focus:outline-none" 
+                                onchange="updateHourlyRate(this.value)">
+                            <span class="text-zinc-500">zł/h</span>
+                        </div>
+                    </div>
+                    <div id="freedomStats" class="space-y-3">
+                        <div class="flex justify-between items-center py-2 border-b border-zinc-800">
+                            <span class="text-sm text-zinc-400">Dziś przepracowałeś na:</span>
+                            <span class="font-bold text-red-400" id="hoursWorkedToday">0h 0min</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 border-b border-zinc-800">
+                            <span class="text-sm text-zinc-400">Ten miesiąc:</span>
+                            <span class="font-bold text-red-400" id="hoursWorkedMonth">0h 0min</span>
+                        </div>
+                        <div class="bg-blue-500/10 rounded-xl p-3 mt-3">
+                            <p class="text-xs text-blue-400">💡 Gdybyś odkładał te pieniądze miesięcznie przez rok z 5%:</p>
+                            <div class="text-xl font-bold text-blue-400 mt-1" id="projectionYear">0.00 zł</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHALLENGES -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-trophy text-emerald-500"></i>
+                        </div>
+                        <h3 class="text-lg font-bold">🏆 Wyzwania 7-dniowe</h3>
+                    </div>
+                    
+                    <div class="space-y-3 mb-4">
+                        <select id="challengeCategory" 
+                            class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="Jedzenie">🍔 Jedzenie (kebaby, fastfood)</option>
                             <option value="Palenie">🚬 Palenie</option>
-                            <option value="Inne">💩 Inne</option>
+                            <option value="Rozrywka">🎮 Rozrywka (streaming, gry)</option>
+                            <option value="Transport">🚗 Transport (taxi, uber)</option>
+                            <option value="Inne">💩 Inne pierdoły</option>
                         </select>
-                        <button onclick="addExpense()" class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
-                            <i class="fas fa-skull-crossbones mr-2"></i> DODAJ WYDATEK
+                        <button onclick="startChallenge()" 
+                            class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
+                            <i class="fas fa-fire mr-2"></i> STARTUJ WYZWANIE
                         </button>
                     </div>
                     
-                    <div class="max-h-80 overflow-y-auto space-y-2" id="expensesList">
-                        <div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się!</div>
+                    <div id="challengesList" class="space-y-3 max-h-64 overflow-y-auto">
+                        <div class="text-center text-zinc-600 py-4 text-sm">Brak aktywnych wyzwań. Czas coś zmienić.</div>
                     </div>
                 </div>
-            </div>
 
-            <div class="card bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
-                <div class="flex items-center gap-3 mb-6">
-                    <i class="fas fa-shield-alt text-4xl text-emerald-500"></i>
-                    <h3 class="text-2xl font-semibold">Killer Pierdół</h3>
+                <!-- KILLER PIERDÓŁ -->
+                <div class="card bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-shield-alt text-red-500"></i>
+                        </div>
+                        <h3 class="text-lg font-bold">🛡️ Killer Pierdół</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                            <i class="fas fa-car text-red-500 mb-2 block"></i>
+                            <h4 class="font-bold text-sm mb-1">Parkingowe Janusze</h4>
+                            <p class="text-zinc-400 text-xs">200 zł mandatu vs 0 zł na darmowym parkingu. Sprawdź mapę.</p>
+                        </div>
+                        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                            <i class="fas fa-file-alt text-red-500 mb-2 block"></i>
+                            <h4 class="font-bold text-sm mb-1">Urzędowy Gównoburza</h4>
+                            <p class="text-zinc-400 text-xs">90% spraw załatwisz online w 5 minut zamiast 3h w kolejce.</p>
+                        </div>
+                        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                            <i class="fas fa-clock text-red-500 mb-2 block"></i>
+                            <h4 class="font-bold text-sm mb-1">Kolejki do lekarza</h4>
+                            <p class="text-zinc-400 text-xs">Telemedycyna, recepty online. Pakiet prywatny 50 zł/mc.</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="space-y-4">
-                    <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5">
-                        <i class="fas fa-car text-red-500 text-2xl mb-2 block"></i>
-                        <h4 class="font-bold text-lg mb-1">Parkingowe Janusze</h4>
-                        <p class="text-zinc-400 text-sm">Zamiast płacić 200 zł mandatu - skorzystaj z darmowych stref parkowania. Sprawdź mapę darmowych parkingów w Twojej okolicy.</p>
-                    </div>
-                    <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5">
-                        <i class="fas fa-file-alt text-red-500 text-2xl mb-2 block"></i>
-                        <h4 class="font-bold text-lg mb-1">Urzędowy Gównoburza</h4>
-                        <p class="text-zinc-400 text-sm">90% spraw załatwisz online bez kolejki. Zamiast tracić 3 godziny - kliknij 5 minut.</p>
-                    </div>
-                    <div class="bg-red-500/10 border border-red-500/30 rounded-2xl p-5">
-                        <i class="fas fa-clock text-red-500 text-2xl mb-2 block"></i>
-                        <h4 class="font-bold text-lg mb-1">Kolejki do lekarza</h4>
-                        <p class="text-zinc-400 text-sm">Telemedycyna, recepty online, prywatny pakiet za 50 zł/mc. Twoje zdrowie > czekanie 3 miesiące.</p>
-                    </div>
-                    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-center">
-                        <i class="fas fa-dumbbell text-emerald-500 text-3xl mb-2 block"></i>
-                        <p class="font-bold">[ROBOCIAŁY] w przygotowaniu</p>
-                        <p class="text-zinc-500 text-xs">Kolejne zabójcze rozwiązania już wkrótce</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="text-center space-y-4">
-            <button onclick="resetExpenses()" class="brutal-btn bg-red-600/20 hover:bg-red-600/30 text-red-500 px-8 py-3 rounded-xl font-semibold border border-red-500/30">
-                <i class="fas fa-trash-alt mr-2"></i> RESETUJ WSZYSTKO (tylko dla twardzieli)
-            </button>
-            <div class="border-t border-zinc-800 pt-8 text-zinc-500 text-sm">
-                <p>W sumie wydałeś <span id="totalAmountBottom" class="text-red-500 font-bold">0.00 zł</span> dzisiaj. Każda złota która nie wyciekła na pierdoły to bliżej do wolności.</p>
             </div>
         </div>
     </main>
 
-    <footer class="border-t border-zinc-800 bg-black/50 mt-20">
-        <div class="max-w-6xl mx-auto px-6 py-8">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-zinc-500 text-sm">
-                <div class="flex gap-6">
-                    <span><i class="fas fa-envelope mr-2 text-emerald-500"></i> wojciechjarosz41@gmail.com</span>
-                    <span><i class="fas fa-phone mr-2 text-emerald-500"></i> 604 296 360</span>
+    <!-- SETTINGS MODAL -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold">⚙️ Ustawienia</h3>
+                <button onclick="hideSettings()" class="text-zinc-500 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-sm text-zinc-400 mb-2 block">Stawka godzinowa (zł)</label>
+                    <input type="number" id="settingsRate" step="0.5" 
+                        class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
-                    <span><i class="fas fa-globe mr-2 text-emerald-500"></i> wwwronin.pl</span>
+                    <label class="text-sm text-zinc-400 mb-2 block">Email (do powiadomień)</label>
+                    <input type="email" id="settingsEmail" placeholder="twoj@email.pl" 
+                        class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
                 </div>
-                <div class="text-zinc-600">
-                    © 2025 ODDECH - Dość bycia wydymanym
-                </div>
+                <button onclick="saveSettings()" 
+                    class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
+                    <i class="fas fa-save mr-2"></i> ZAPISZ
+                </button>
+                <button onclick="resetAllData()" 
+                    class="brutal-btn w-full bg-red-600/20 hover:bg-red-600/30 text-red-500 font-semibold py-3 rounded-xl border border-red-500/30 mt-2">
+                    <i class="fas fa-trash-alt mr-2"></i> RESETUJ WSZYSTKO
+                </button>
             </div>
         </div>
-    </footer>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 space-y-2"></div>
 
     <script>
-        // Supabase - poprawione połączenie
+        // ==================== KONFIGURACJA ====================
         const SUPABASE_URL = 'https://ofsxuoujixgndkbavlim.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_VqLAfNEa1f3y-tINO7OYpA_KmtqCO4r';
+        const EMAILJS_SERVICE_ID = 'service_t2o52p5';
+        const EMAILJS_TEMPLATE_ID = 'template_gz2brlg';
+        const EMAILJS_PUBLIC_KEY = 'XLc3EHKvNjMA4X6jC';
+
+        // ==================== GLOBALNE ZMIENNE ====================
         let supabaseClient = null;
-        
-        if (typeof supabaseJs !== 'undefined') {
-            supabaseClient = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        }
-        
         let expenses = [];
+        let challenges = [];
+        let userSettings = { hourly_rate: 25, email: '' };
+        let userId = '';
+        let currentFilter = 'all';
+        let comparisonChart = null;
 
-        function loadExpenses() {
-            const saved = localStorage.getItem('oddech_expenses');
-            if (saved) {
-                try {
-                    expenses = JSON.parse(saved);
-                } catch(e) {
-                    expenses = [];
-                }
-            } else {
-                expenses = [];
+        // ==================== INICJALIZACJA ====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Inicjalizacja Supabase
+            try {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } catch(e) {
+                console.error('Supabase init error:', e);
             }
+
+            // Inicjalizacja EmailJS
+            try {
+                emailjs.init(EMAILJS_PUBLIC_KEY);
+            } catch(e) {
+                console.error('EmailJS init error:', e);
+            }
+
+            // Generuj lub pobierz user ID
+            userId = localStorage.getItem('oddech_user_id');
+            if (!userId) {
+                userId = 'user_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+                localStorage.setItem('oddech_user_id', userId);
+            }
+            document.getElementById('userIdDisplay').textContent = userId.substring(0, 12) + '...';
+
+            // Pobierz ustawienia
+            loadSettings();
+            
+            // Pobierz dane
+            await loadExpenses();
+            await loadChallenges();
+            
+            // Renderuj
             renderExpenses();
+            renderChallenges();
+            updateStats();
+            renderComparisonChart();
+            checkJanuszAlert();
+
+            // Event listeners
+            document.getElementById('expenseAmount').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
+            document.getElementById('expenseDesc').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
+        });
+
+        // ==================== USTAWIENIA ====================
+        function loadSettings() {
+            const saved = localStorage.getItem('oddech_settings');
+            if (saved) {
+                userSettings = JSON.parse(saved);
+            }
+            document.getElementById('hourlyRate').value = userSettings.hourly_rate;
+            document.getElementById('settingsRate').value = userSettings.hourly_rate;
+            document.getElementById('settingsEmail').value = userSettings.email || '';
         }
 
-        function saveExpenses() {
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+        function saveSettings() {
+            userSettings.hourly_rate = parseFloat(document.getElementById('settingsRate').value) || 25;
+            userSettings.email = document.getElementById('settingsEmail').value || '';
+            localStorage.setItem('oddech_settings', JSON.stringify(userSettings));
+            document.getElementById('hourlyRate').value = userSettings.hourly_rate;
+            hideSettings();
+            updateStats();
+            showToast('Ustawienia zapisane!', 'success');
         }
 
-        function addExpense() {
+        function updateHourlyRate(value) {
+            userSettings.hourly_rate = parseFloat(value) || 25;
+            localStorage.setItem('oddech_settings', JSON.stringify(userSettings));
+            updateStats();
+        }
+
+        function showSettings() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            document.getElementById('settingsModal').classList.add('flex');
+        }
+
+        function hideSettings() {
+            document.getElementById('settingsModal').classList.add('hidden');
+            document.getElementById('settingsModal').classList.remove('flex');
+        }
+
+        // ==================== WYDATKI ====================
+        async function loadExpenses() {
+            // Najpierw localStorage (instant)
+            const local = localStorage.getItem('oddech_expenses');
+            if (local) {
+                try { expenses = JSON.parse(local); } catch(e) { expenses = []; }
+            }
+
+            // Potem sync z Supabase
+            if (supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('expenses')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    if (data && data.length > 0) {
+                        expenses = data.map(d => ({
+                            id: d.id,
+                            amount: parseFloat(d.amount),
+                            description: d.description,
+                            category: d.category,
+                            hours_of_work: d.hours_of_work,
+                            date: d.created_at,
+                            user_id: d.user_id
+                        }));
+                        localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+                    }
+                } catch(e) {
+                    console.log('Supabase sync failed, using local:', e.message);
+                }
+            }
+        }
+
+        async function addExpense() {
             const amountInput = document.getElementById('expenseAmount');
             const descInput = document.getElementById('expenseDesc');
             const categorySelect = document.getElementById('expenseCategory');
@@ -170,120 +444,579 @@
             const category = categorySelect.value;
             
             if (isNaN(amount) || amount <= 0) {
-                alert('KURWA - podaj prawidłową kwotę!');
+                showToast('KURWA - podaj prawidłową kwotę!', 'error');
                 return;
             }
             
             if (description === '') {
-                alert('Napisz za co wydałeś - skonfrontuj się z prawdą.');
+                showToast('Napisz za co wydałeś - skonfrontuj się z prawdą.', 'error');
                 return;
             }
             
             amount = Math.round(amount * 100) / 100;
+            const hoursOfWork = (amount / userSettings.hourly_rate).toFixed(2);
             
             const expense = {
-                id: Date.now().toString(),
+                id: 'exp_' + Date.now(),
+                user_id: userId,
                 amount: amount,
                 description: description,
                 category: category,
+                hours_of_work: parseFloat(hoursOfWork),
                 date: new Date().toISOString()
             };
             
+            // Dodaj do lokalnej listy
             expenses.unshift(expense);
-            saveExpenses();
-            renderExpenses();
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
+            // Sync z Supabase
+            if (supabaseClient) {
+                try {
+                    await supabaseClient.from('expenses').insert({
+                        user_id: userId,
+                        amount: amount,
+                        description: description,
+                        category: category,
+                        hours_of_work: hoursOfWork
+                    });
+                } catch(e) {
+                    console.log('Supabase insert failed:', e.message);
+                }
+            }
+            
+            // Sprawdź wyzwania
+            checkChallengesAfterExpense(category, amount);
+            
+            // Reset form
             amountInput.value = '';
             descInput.value = '';
             categorySelect.value = 'Jedzenie';
             
-            showBrutalFeedback(amount, description, category);
+            // Render
+            renderExpenses();
+            updateStats();
+            renderComparisonChart();
+            checkJanuszAlert();
+            
+            // Feedback
+            showBrutalFeedback(amount, description, category, hoursOfWork);
         }
-        
-        function showBrutalFeedback(amount, description, category) {
+
+        function showBrutalFeedback(amount, description, category, hours) {
             const messages = [
-                `Kolejne ${amount} zł wyjebane w ${description} (${category}). Idziesz na dno czy ogarniesz się w końcu?`,
-                `${amount} zł mniej. ${description} (${category})? Naprawdę? Twoja stara miałaby rację.`,
-                `Wydałeś ${amount} zł na ${description} (${category}). Twoje konto płacze. Twoje przyszłe ja cię nienawidzi.`,
-                `*BRUTALNY DŹWIĘK TRĄBKI* ${amount} zł poszło. ${description} (${category}). Zastanów się chwilę.`,
-                `Nie no spoko, wydawaj dalej. ${amount} zł na ${description} (${category}). Mega opłacalne.`
+                `Kolejne ${amount} zł wyjebane w ${description}. To ${hours}h Twojej roboty. Idziesz na dno?`,
+                `${amount} zł = ${hours}h pracy. ${description} (${category})? Naprawdę?`,
+                `Wydałeś ${amount} zł na ${description}. Twoje konto płacze. Twoje przyszłe ja cię nienawidzi.`,
+                `*BRUTALNY DŹWIĘK TRĄBKI* ${amount} zł poszło. ${hours}h roboty w piach. Zastanów się.`,
+                `Nie no spoko, wydawaj dalej. ${amount} zł na ${description}. Tylko ${hours}h życia.`
             ];
             const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-            const toast = document.createElement('div');
-            toast.className = 'fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 font-bold text-sm';
-            toast.innerHTML = `<i class="fas fa-skull mr-2"></i> ${randomMsg}`;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            showToast(randomMsg, 'error', 4000);
         }
-        
-        function deleteExpense(id) {
-            if (confirm('Usunąć ten wpierdol finansowy? Faktura zostanie w pamięci Twoich grzechów.')) {
-                expenses = expenses.filter(e => e.id !== id);
-                saveExpenses();
-                renderExpenses();
+
+        async function deleteExpense(id) {
+            if (!confirm('Usunąć ten wpierdol finansowy?')) return;
+            
+            expenses = expenses.filter(e => e.id !== id);
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+            
+            if (supabaseClient) {
+                try {
+                    await supabaseClient.from('expenses').delete().eq('id', id);
+                } catch(e) {
+                    console.log('Supabase delete failed:', e.message);
+                }
             }
+            
+            renderExpenses();
+            updateStats();
+            renderComparisonChart();
         }
-        
+
+        function filterExpenses(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-emerald-600', 'text-white');
+                btn.classList.add('bg-zinc-800', 'text-zinc-400');
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active', 'bg-emerald-600', 'text-white');
+                    btn.classList.remove('bg-zinc-800', 'text-zinc-400');
+                }
+            });
+            renderExpenses();
+        }
+
         function renderExpenses() {
             const container = document.getElementById('expensesList');
-            const totalSpan = document.getElementById('totalAmount');
-            const totalBottom = document.getElementById('totalAmountBottom');
+            let filtered = expenses;
             
-            const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-            totalSpan.innerText = total.toFixed(2) + ' zł';
-            if (totalBottom) totalBottom.innerText = total.toFixed(2) + ' zł';
+            const now = new Date();
+            if (currentFilter === 'today') {
+                filtered = expenses.filter(e => {
+                    const d = new Date(e.date);
+                    return d.toDateString() === now.toDateString();
+                });
+            } else if (currentFilter === 'week') {
+                const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+                filtered = expenses.filter(e => new Date(e.date) >= weekAgo);
+            }
             
-            if (expenses.length === 0) {
-                container.innerHTML = '<div class="text-center text-zinc-600 py-8">Brak wydatków. Trzymaj się kurwa!</div>';
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-zinc-600 py-12">
+                        <i class="fas fa-ghost text-4xl mb-3 opacity-30"></i>
+                        <p>Brak wydatków. Trzymaj się!</p>
+                    </div>`;
                 return;
             }
             
-            container.innerHTML = expenses.map(exp => `
-                <div class="bg-black/40 rounded-xl p-4 border-l-4 border-red-500 flex justify-between items-center hover:bg-zinc-800/50 transition">
-                    <div class="flex-1">
-                        <div class="font-bold text-white">-${exp.amount.toFixed(2)} zł</div>
-                        <div class="text-sm text-zinc-500">${escapeHtml(exp.description)} <span class="text-emerald-500">[${escapeHtml(exp.category)}]</span></div>
-                        <div class="text-xs text-zinc-600">${new Date(exp.date).toLocaleString('pl-PL')}</div>
+            container.innerHTML = filtered.map(exp => {
+                const date = new Date(exp.date);
+                const hours = exp.hours_of_work || (exp.amount / userSettings.hourly_rate).toFixed(2);
+                return `
+                <div class="expense-item bg-black/40 rounded-xl p-4 border-l-4 ${getCategoryColor(exp.category)} flex justify-between items-start hover:bg-zinc-800/50 transition">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-bold text-white text-lg">-${exp.amount.toFixed(2)} zł</span>
+                            <span class="text-xs bg-zinc-800 px-2 py-1 rounded-lg text-zinc-400">${escapeHtml(exp.category)}</span>
+                        </div>
+                        <div class="text-sm text-zinc-400 mt-1">${escapeHtml(exp.description)}</div>
+                        <div class="flex items-center gap-3 mt-2 text-xs">
+                            <span class="text-blue-400"><i class="fas fa-clock mr-1"></i>${hours}h pracy</span>
+                            <span class="text-zinc-600">${date.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
                     </div>
-                    <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-4">
-                        <i class="fas fa-skull text-xl"></i>
+                    <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-3 flex-shrink-0">
+                        <i class="fas fa-skull text-lg"></i>
                     </button>
-                </div>
-            `).join('');
+                </div>`;
+            }).join('');
         }
-        
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
+
+        function getCategoryColor(cat) {
+            const colors = {
+                'Jedzenie': 'border-orange-500',
+                'Transport': 'border-blue-500',
+                'Rachunki': 'border-yellow-500',
+                'Rozrywka': 'border-purple-500',
+                'Zdrowie': 'border-green-500',
+                'Ubrania': 'border-pink-500',
+                'Palenie': 'border-red-600',
+                'Inne': 'border-zinc-500'
+            };
+            return colors[cat] || 'border-zinc-500';
+        }
+
+        // ==================== STATYSTYKI ====================
+        function updateStats() {
+            const now = new Date();
+            const today = expenses.filter(e => {
+                const d = new Date(e.date);
+                return d.toDateString() === now.toDateString();
+            });
+            
+            const totalToday = today.reduce((sum, e) => sum + e.amount, 0);
+            const totalSaved = challenges.filter(c => c.status === 'completed').reduce((sum, c) => sum + (c.saved_amount || 0), 0);
+            const avgHours = today.length > 0 ? (today.reduce((sum, e) => sum + (e.hours_of_work || e.amount / userSettings.hourly_rate), 0) / today.length).toFixed(1) : 0;
+            
+            document.getElementById('totalToday').textContent = totalToday.toFixed(2) + ' zł';
+            document.getElementById('todayCount').textContent = today.length + ' transakcji';
+            document.getElementById('totalSaved').textContent = totalSaved.toFixed(2) + ' zł';
+            document.getElementById('activeChallenges').textContent = challenges.filter(c => c.status === 'active').length + ' aktywnych wyzwań';
+            document.getElementById('avgHoursToday').textContent = avgHours + 'h';
+            
+            // Stawka wolności
+            const hoursToday = totalToday / userSettings.hourly_rate;
+            const hoursMonth = expenses.filter(e => {
+                const d = new Date(e.date);
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            }).reduce((sum, e) => sum + e.amount, 0) / userSettings.hourly_rate;
+            
+            document.getElementById('hoursWorkedToday').textContent = formatHours(hoursToday);
+            document.getElementById('hoursWorkedMonth').textContent = formatHours(hoursMonth);
+            
+            // Kumulacja (projection)
+            const monthlyAvg = expenses.length > 0 ? 
+                expenses.reduce((sum, e) => sum + e.amount, 0) / Math.max(1, expenses.length) * 30 : 0;
+            const yearProjection = monthlyAvg * 12 * 1.05; // 5% "odsetki"
+            document.getElementById('projectionYear').textContent = yearProjection.toFixed(2) + ' zł';
+        }
+
+        function formatHours(hours) {
+            const h = Math.floor(hours);
+            const m = Math.round((hours - h) * 60);
+            return h + 'h ' + m + 'min';
+        }
+
+        // ==================== WYKRES PORÓWNAŃ ====================
+        function renderComparisonChart() {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            const now = new Date();
+            
+            // Ostatnie 30 dni - podzielone na 6 okresów 5-dniowych
+            const labels = [];
+            const currentData = [];
+            const previousData = [];
+            
+            for (let i = 5; i >= 0; i--) {
+                const endCurrent = new Date(now - i * 5 * 24 * 60 * 60 * 1000);
+                const startCurrent = new Date(endCurrent - 5 * 24 * 60 * 60 * 1000);
+                const endPrevious = new Date(startCurrent);
+                const startPrevious = new Date(endPrevious - 5 * 24 * 60 * 60 * 1000);
+                
+                labels.push(startCurrent.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit' }));
+                
+                currentData.push(expenses.filter(e => {
+                    const d = new Date(e.date);
+                    return d >= startCurrent && d < endCurrent;
+                }).reduce((sum, e) => sum + e.amount, 0));
+                
+                previousData.push(expenses.filter(e => {
+                    const d = new Date(e.date);
+                    return d >= startPrevious && d < endPrevious;
+                }).reduce((sum, e) => sum + e.amount, 0));
+            }
+            
+            if (comparisonChart) comparisonChart.destroy();
+            
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ty teraz',
+                            data: currentData,
+                            backgroundColor: '#10b981',
+                            borderRadius: 6,
+                        },
+                        {
+                            label: 'Ty wcześniej',
+                            data: previousData,
+                            backgroundColor: '#3f3f46',
+                            borderRadius: 6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#a1a1aa', font: { size: 12 } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: '#71717a', callback: v => v + ' zł' },
+                            grid: { color: '#27272a' }
+                        },
+                        x: {
+                            ticks: { color: '#71717a' },
+                            grid: { display: false }
+                        }
+                    }
+                }
             });
         }
-        
-        function resetExpenses() {
-            if (confirm('RESETUJESZ WSZYSTKIE WYDATKI.\n\nJesteś pewien? To jak wymazać swoje grzechy finansowe.\n(ale od czegoś trzeba zacząć)')) {
-                expenses = [];
-                saveExpenses();
-                renderExpenses();
-                const toast = document.createElement('div');
-                toast.className = 'fixed top-24 left-1/2 transform -translate-x-1/2 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50 font-bold';
-                toast.innerHTML = '<i class="fas fa-fire mr-2"></i> WYPIERDOLONE. ZERRO. ZACZYNASZ OD NOWA.';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2500);
+
+        // ==================== JANUSZ ALERT ====================
+        function checkJanuszAlert() {
+            const now = new Date();
+            const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            const recent = expenses.filter(e => new Date(e.date) >= weekAgo);
+            
+            // Sprawdź wzorce
+            const categories = {};
+            recent.forEach(e => {
+                categories[e.category] = (categories[e.category] || 0) + 1;
+            });
+            
+            let alertMsg = '';
+            let showAlert = false;
+            
+            // Kebab 3+ razy w tygodniu
+            if ((categories['Jedzenie'] || 0) >= 3) {
+                const kebabTotal = recent.filter(e => e.category === 'Jedzenie').reduce((s, e) => s + e.amount, 0);
+                alertMsg = `🍔 ${categories['Jedzenie']} razy jedzenie na mieście w tym tygodniu. To ${kebabTotal.toFixed(2)} zł. Twoja wątroba i portfel płaczą.`;
+                showAlert = true;
+            }
+            
+            // Palenie
+            if ((categories['Palenie'] || 0) >= 2) {
+                const smokeTotal = recent.filter(e => e.category === 'Palenie').reduce((s, e) => s + e.amount, 0);
+                alertMsg = `🚬 ${categories['Palenie']} razy palenie. To ${smokeTotal.toFixed(2)} zł. Rok = ${(smokeTotal * 52).toFixed(0)} zł. Możesz mieć nowe auto.`;
+                showAlert = true;
+            }
+            
+            // Transport
+            if ((categories['Transport'] || 0) >= 4) {
+                const transTotal = recent.filter(e => e.category === 'Transport').reduce((s, e) => s + e.amount, 0);
+                alertMsg = `🚗 ${categories['Transport']} razy transport. To ${transTotal.toFixed(2)} zł. Rower? Autobus? Cokolwiek?`;
+                showAlert = true;
+            }
+            
+            const alertDiv = document.getElementById('januszAlert');
+            if (showAlert) {
+                document.getElementById('januszMessage').textContent = alertMsg;
+                alertDiv.classList.remove('hidden');
+            } else {
+                alertDiv.classList.add('hidden');
             }
         }
-        
-        // Inicjalizacja
-        loadExpenses();
-        
-        // Eventy klawiszy Enter
-        const amountField = document.getElementById('expenseAmount');
-        const descField = document.getElementById('expenseDesc');
-        if (amountField) amountField.addEventListener('keypress', function(e) { if (e.key === 'Enter') addExpense(); });
-        if (descField) descField.addEventListener('keypress', function(e) { if (e.key === 'Enter') addExpense(); });
+
+        function dismissJanusz() {
+            document.getElementById('januszAlert').classList.add('hidden');
+        }
+
+        // ==================== WYZWANIA ====================
+        async function loadChallenges() {
+            const local = localStorage.getItem('oddech_challenges');
+            if (local) {
+                try { challenges = JSON.parse(local); } catch(e) { challenges = []; }
+            }
+            
+            if (supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('challenges')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (error) throw error;
+                    if (data && data.length > 0) {
+                        challenges = data.map(d => ({
+                            id: d.id,
+                            user_id: d.user_id,
+                            category: d.category,
+                            start_date: d.start_date,
+                            end_date: d.end_date,
+                            saved_amount: parseFloat(d.saved_amount || 0),
+                            status: d.status,
+                            created_at: d.created_at
+                        }));
+                        localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+                    }
+                } catch(e) {
+                    console.log('Supabase challenges failed:', e.message);
+                }
+            }
+            
+            // Sprawdź czy wyzwania się zakończyły
+            const now = new Date();
+            challenges.forEach(c => {
+                if (c.status === 'active' && new Date(c.end_date) < now) {
+                    c.status = 'completed';
+                }
+            });
+        }
+
+        async function startChallenge() {
+            const category = document.getElementById('challengeCategory').value;
+            
+            // Sprawdź czy nie ma już aktywnego na tę kategorię
+            const existing = challenges.find(c => c.category === category && c.status === 'active');
+            if (existing) {
+                showToast(`Masz już aktywne wyzwanie dla ${category}!`, 'error');
+                return;
+            }
+            
+            const now = new Date();
+            const endDate = new Date(now + 7 * 24 * 60 * 60 * 1000);
+            
+            const challenge = {
+                id: 'ch_' + Date.now(),
+                user_id: userId,
+                category: category,
+                start_date: now.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0],
+                saved_amount: 0,
+                status: 'active',
+                created_at: now.toISOString()
+            };
+            
+            challenges.unshift(challenge);
+            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+            
+            if (supabaseClient) {
+                try {
+                    await supabaseClient.from('challenges').insert({
+                        user_id: userId,
+                        category: category,
+                        start_date: challenge.start_date,
+                        end_date: challenge.end_date,
+                        saved_amount: 0,
+                        status: 'active'
+                    });
+                } catch(e) {
+                    console.log('Supabase challenge insert failed:', e.message);
+                }
+            }
+            
+            // Wyślij powiadomienie EmailJS
+            if (userSettings.email) {
+                try {
+                    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                        to_email: userSettings.email,
+                        challenge_category: category,
+                        days_remaining: '7',
+                        saved_so_far: '0.00 zł',
+                        end_date: endDate.toLocaleDateString('pl-PL')
+                    });
+                } catch(e) {
+                    console.log('EmailJS failed:', e.message);
+                }
+            }
+            
+            renderChallenges();
+            updateStats();
+            showToast(`🔥 Wyzwanie 7-dniowe bez ${category} rozpoczęte!`, 'success');
+        }
+
+        function checkChallengesAfterExpense(category, amount) {
+            const now = new Date();
+            challenges.forEach(c => {
+                if (c.status === 'active' && c.category === category) {
+                    // Użytkownik złamał wyzwanie!
+                    c.status = 'failed';
+                    showToast(`💀 Wyzwanie ${c.category} ZBITE! Wydano ${amount} zł.`, 'error', 5000);
+                } else if (c.status === 'active' && c.category !== category) {
+                    // Zaoszczędził na innej kategorii - liczymy jako oszczędność
+                    // ( uproszczone - w prawdziwej wersji liczylibyśmy średnią z poprzednich tygodni)
+                }
+            });
+            
+            // Aktualizuj zaoszczędzone w aktywnych wyzwaniach
+            challenges.filter(c => c.status === 'active').forEach(c => {
+                // Szacujemy oszczędność jako średni wydatek z poprzednich 7 dni minus 0
+                const weekAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
+                const prevWeek = expenses.filter(e => {
+                    const d = new Date(e.date);
+                    return e.category === c.category && d >= weekAgo && d < new Date(now - 7 * 24 * 60 * 60 * 1000);
+                });
+                const avgDaily = prevWeek.length > 0 ? prevWeek.reduce((s, e) => s + e.amount, 0) / 7 : 20;
+                c.saved_amount = (c.saved_amount || 0) + avgDaily;
+            });
+            
+            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+            renderChallenges();
+            updateStats();
+        }
+
+        function renderChallenges() {
+            const container = document.getElementById('challengesList');
+            const active = challenges.filter(c => c.status === 'active');
+            const completed = challenges.filter(c => c.status === 'completed');
+            const failed = challenges.filter(c => c.status === 'failed');
+            
+            if (active.length === 0 && completed.length === 0 && failed.length === 0) {
+                container.innerHTML = '<div class="text-center text-zinc-600 py-4 text-sm">Brak wyzwań. Czas coś zmienić.</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            active.forEach(c => {
+                const end = new Date(c.end_date);
+                const now = new Date();
+                const daysLeft = Math.ceil((end - now) / (24 * 60 * 60 * 1000));
+                const progress = Math.max(0, Math.min(100, ((7 - daysLeft) / 7) * 100));
+                
+                html += `
+                <div class="bg-black/50 rounded-xl p-4 border border-emerald-500/30">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="font-bold text-emerald-400">🔥 ${c.category}</span>
+                            <span class="text-xs text-zinc-500 ml-2">${daysLeft} dni</span>
+                        </div>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">AKTYWNE</span>
+                    </div>
+                    <div class="w-full bg-zinc-800 rounded-full h-2 mb-2">
+                        <div class="bg-emerald-500 h-2 rounded-full transition-all" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="text-xs text-zinc-500">Oszczędzono: <span class="text-emerald-400 font-bold">${(c.saved_amount || 0).toFixed(2)} zł</span></div>
+                </div>`;
+            });
+            
+            completed.forEach(c => {
+                html += `
+                <div class="bg-black/30 rounded-xl p-3 border border-zinc-800 opacity-70">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-zinc-400">✅ ${c.category}</span>
+                        <span class="text-xs text-emerald-500 font-bold">+${(c.saved_amount || 0).toFixed(2)} zł</span>
+                    </div>
+                </div>`;
+            });
+            
+            failed.forEach(c => {
+                html += `
+                <div class="bg-black/30 rounded-xl p-3 border border-red-900/30 opacity-60">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-zinc-500">💀 ${c.category}</span>
+                        <span class="text-xs text-red-500">ZBITE</span>
+                    </div>
+                </div>`;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // ==================== UTILS ====================
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                error: 'bg-red-600',
+                success: 'bg-emerald-600',
+                info: 'bg-blue-600'
+            };
+            
+            const icons = {
+                error: 'fa-skull',
+                success: 'fa-check',
+                info: 'fa-info-circle'
+            };
+            
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-3 slide-in max-w-md`;
+            toast.innerHTML = `<i class="fas ${icons[type]}"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        function resetAllData() {
+            if (!confirm('RESETUJESZ WSZYSTKIE DANE.\n\nWydatki, wyzwania, wszystko.\n\nJesteś pewien?')) return;
+            
+            expenses = [];
+            challenges = [];
+            localStorage.removeItem('oddech_expenses');
+            localStorage.removeItem('oddech_challenges');
+            
+            if (supabaseClient) {
+                supabaseClient.from('expenses').delete().eq('user_id', userId).then(() => {});
+                supabaseClient.from('challenges').delete().eq('user_id', userId).then(() => {});
+            }
+            
+            renderExpenses();
+            renderChallenges();
+            updateStats();
+            renderComparisonChart();
+            hideSettings();
+            showToast('WYPIERDOLONE. ZERRO. ZACZYNASZ OD NOWA.', 'success');
+        }
     </script>
 </body>
-</html>
-
+</html>'''
