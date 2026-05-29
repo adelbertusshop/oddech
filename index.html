@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -29,6 +28,7 @@
         ::-webkit-scrollbar-thumb:hover { background: #555; }
         .expense-item { animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .filter-btn.active { background: #10b981 !important; color: white !important; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -158,9 +158,9 @@
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-lg font-bold">📝 Historia Wydatków</h3>
                         <div class="flex gap-2">
-                            <button onclick="filterExpenses('all')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn active" data-filter="all">Wszystko</button>
-                            <button onclick="filterExpenses('today')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn" data-filter="today">Dziś</button>
-                            <button onclick="filterExpenses('week')" class="text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition filter-btn" data-filter="week">Tydzień</button>
+                            <button onclick="filterExpenses('all')" class="filter-btn text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition active" data-filter="all">Wszystko</button>
+                            <button onclick="filterExpenses('today')" class="filter-btn text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition" data-filter="today">Dziś</button>
+                            <button onclick="filterExpenses('week')" class="filter-btn text-xs px-3 py-1 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition" data-filter="week">Tydzień</button>
                         </div>
                     </div>
                     <div class="max-h-96 overflow-y-auto space-y-2" id="expensesList">
@@ -323,15 +323,17 @@
             // Inicjalizacja Supabase
             try {
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('✅ Supabase connected');
             } catch(e) {
-                console.error('Supabase init error:', e);
+                console.error('❌ Supabase init error:', e);
             }
 
             // Inicjalizacja EmailJS
             try {
                 emailjs.init(EMAILJS_PUBLIC_KEY);
+                console.log('✅ EmailJS connected');
             } catch(e) {
-                console.error('EmailJS init error:', e);
+                console.error('❌ EmailJS init error:', e);
             }
 
             // Generuj lub pobierz user ID
@@ -415,21 +417,30 @@
                         .eq('user_id', userId)
                         .order('created_at', { ascending: false });
                     
-                    if (error) throw error;
+                    if (error) {
+                        console.error('Supabase select error:', error);
+                        throw error;
+                    }
+                    
                     if (data && data.length > 0) {
+                        console.log('📥 Pobrano z Supabase:', data.length, 'wierszy');
                         expenses = data.map(d => ({
-                            id: d.id,
+                            local_id: d.id,  // UUID z Supabase
+                            id: d.id,        // dla kompatybilności
+                            user_id: d.user_id,
                             amount: parseFloat(d.amount),
                             description: d.description,
                             category: d.category,
-                            hours_of_work: d.hours_of_work,
+                            hours_of_work: d.hours_of_work ? parseFloat(d.hours_of_work) : null,
                             date: d.created_at,
-                            user_id: d.user_id
+                            supabase_id: d.id
                         }));
                         localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+                    } else {
+                        console.log('📭 Brak danych w Supabase dla tego usera');
                     }
                 } catch(e) {
-                    console.log('Supabase sync failed, using local:', e.message);
+                    console.log('⚠️ Supabase sync failed, using local:', e.message);
                 }
             }
         }
@@ -455,35 +466,52 @@
             
             amount = Math.round(amount * 100) / 100;
             const hoursOfWork = (amount / userSettings.hourly_rate).toFixed(2);
+            const localId = 'exp_' + Date.now();
             
             const expense = {
-                id: 'exp_' + Date.now(),
+                local_id: localId,
+                id: localId,
                 user_id: userId,
                 amount: amount,
                 description: description,
                 category: category,
                 hours_of_work: parseFloat(hoursOfWork),
-                date: new Date().toISOString()
+                date: new Date().toISOString(),
+                supabase_id: null
             };
             
             // Dodaj do lokalnej listy
             expenses.unshift(expense);
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
-            // Sync z Supabase
+            // Sync z Supabase — NIE wysyłamy id, Supabase generuje uuid sam
             if (supabaseClient) {
                 try {
-                    await supabaseClient.from('expenses').insert({
+                    const { data, error } = await supabaseClient.from('expenses').insert({
                         user_id: userId,
                         amount: amount,
                         description: description,
                         category: category,
                         hours_of_work: hoursOfWork
-                    });
+                    }).select();
+                    
+                    if (error) {
+                        console.error('❌ Supabase insert error:', error);
+                        throw error;
+                    }
+                    
+                    if (data && data[0]) {
+                        // Zapisz supabase_id do lokalnego obiektu
+                        expense.supabase_id = data[0].id;
+                        expense.local_id = data[0].id;
+                        expense.id = data[0].id;
+                        console.log('✅ Zapisano w Supabase, ID:', data[0].id);
+                    }
                 } catch(e) {
-                    console.log('Supabase insert failed:', e.message);
+                    console.log('⚠️ Supabase insert failed:', e.message);
                 }
             }
+            
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
             // Sprawdź wyzwania
             checkChallengesAfterExpense(category, amount);
@@ -518,16 +546,29 @@
         async function deleteExpense(id) {
             if (!confirm('Usunąć ten wpierdol finansowy?')) return;
             
-            expenses = expenses.filter(e => e.id !== id);
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+            const expense = expenses.find(e => e.id === id || e.local_id === id);
             
-            if (supabaseClient) {
+            // Usuń z Supabase po supabase_id (UUID)
+            if (supabaseClient && expense && expense.supabase_id) {
                 try {
-                    await supabaseClient.from('expenses').delete().eq('id', id);
+                    const { error } = await supabaseClient
+                        .from('expenses')
+                        .delete()
+                        .eq('id', expense.supabase_id);
+                    
+                    if (error) {
+                        console.error('❌ Supabase delete error:', error);
+                    } else {
+                        console.log('✅ Usunięto z Supabase:', expense.supabase_id);
+                    }
                 } catch(e) {
-                    console.log('Supabase delete failed:', e.message);
+                    console.log('⚠️ Supabase delete failed:', e.message);
                 }
             }
+            
+            // Usuń lokalnie
+            expenses = expenses.filter(e => e.id !== id && e.local_id !== id);
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
             renderExpenses();
             updateStats();
@@ -537,11 +578,9 @@
         function filterExpenses(filter) {
             currentFilter = filter;
             document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active', 'bg-emerald-600', 'text-white');
-                btn.classList.add('bg-zinc-800', 'text-zinc-400');
+                btn.classList.remove('active');
                 if (btn.dataset.filter === filter) {
-                    btn.classList.add('active', 'bg-emerald-600', 'text-white');
-                    btn.classList.remove('bg-zinc-800', 'text-zinc-400');
+                    btn.classList.add('active');
                 }
             });
             renderExpenses();
@@ -574,6 +613,7 @@
             container.innerHTML = filtered.map(exp => {
                 const date = new Date(exp.date);
                 const hours = exp.hours_of_work || (exp.amount / userSettings.hourly_rate).toFixed(2);
+                const deleteId = exp.id || exp.local_id;
                 return `
                 <div class="expense-item bg-black/40 rounded-xl p-4 border-l-4 ${getCategoryColor(exp.category)} flex justify-between items-start hover:bg-zinc-800/50 transition">
                     <div class="flex-1 min-w-0">
@@ -587,7 +627,7 @@
                             <span class="text-zinc-600">${date.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                     </div>
-                    <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-3 flex-shrink-0">
+                    <button onclick="deleteExpense('${deleteId}')" class="text-red-500 hover:text-red-400 ml-3 flex-shrink-0">
                         <i class="fas fa-skull text-lg"></i>
                     </button>
                 </div>`;
@@ -639,7 +679,7 @@
             // Kumulacja (projection)
             const monthlyAvg = expenses.length > 0 ? 
                 expenses.reduce((sum, e) => sum + e.amount, 0) / Math.max(1, expenses.length) * 30 : 0;
-            const yearProjection = monthlyAvg * 12 * 1.05; // 5% "odsetki"
+            const yearProjection = monthlyAvg * 12 * 1.05;
             document.getElementById('projectionYear').textContent = yearProjection.toFixed(2) + ' zł';
         }
 
@@ -654,7 +694,6 @@
             const ctx = document.getElementById('comparisonChart').getContext('2d');
             const now = new Date();
             
-            // Ostatnie 30 dni - podzielone na 6 okresów 5-dniowych
             const labels = [];
             const currentData = [];
             const previousData = [];
@@ -728,7 +767,6 @@
             const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
             const recent = expenses.filter(e => new Date(e.date) >= weekAgo);
             
-            // Sprawdź wzorce
             const categories = {};
             recent.forEach(e => {
                 categories[e.category] = (categories[e.category] || 0) + 1;
@@ -737,21 +775,18 @@
             let alertMsg = '';
             let showAlert = false;
             
-            // Kebab 3+ razy w tygodniu
             if ((categories['Jedzenie'] || 0) >= 3) {
                 const kebabTotal = recent.filter(e => e.category === 'Jedzenie').reduce((s, e) => s + e.amount, 0);
                 alertMsg = `🍔 ${categories['Jedzenie']} razy jedzenie na mieście w tym tygodniu. To ${kebabTotal.toFixed(2)} zł. Twoja wątroba i portfel płaczą.`;
                 showAlert = true;
             }
             
-            // Palenie
             if ((categories['Palenie'] || 0) >= 2) {
                 const smokeTotal = recent.filter(e => e.category === 'Palenie').reduce((s, e) => s + e.amount, 0);
                 alertMsg = `🚬 ${categories['Palenie']} razy palenie. To ${smokeTotal.toFixed(2)} zł. Rok = ${(smokeTotal * 52).toFixed(0)} zł. Możesz mieć nowe auto.`;
                 showAlert = true;
             }
             
-            // Transport
             if ((categories['Transport'] || 0) >= 4) {
                 const transTotal = recent.filter(e => e.category === 'Transport').reduce((s, e) => s + e.amount, 0);
                 alertMsg = `🚗 ${categories['Transport']} razy transport. To ${transTotal.toFixed(2)} zł. Rower? Autobus? Cokolwiek?`;
@@ -817,7 +852,6 @@
         async function startChallenge() {
             const category = document.getElementById('challengeCategory').value;
             
-            // Sprawdź czy nie ma już aktywnego na tę kategorię
             const existing = challenges.find(c => c.category === category && c.status === 'active');
             if (existing) {
                 showToast(`Masz już aktywne wyzwanie dla ${category}!`, 'error');
@@ -826,37 +860,49 @@
             
             const now = new Date();
             const endDate = new Date(now + 7 * 24 * 60 * 60 * 1000);
+            const localId = 'ch_' + Date.now();
             
             const challenge = {
-                id: 'ch_' + Date.now(),
+                local_id: localId,
+                id: localId,
                 user_id: userId,
                 category: category,
                 start_date: now.toISOString().split('T')[0],
                 end_date: endDate.toISOString().split('T')[0],
                 saved_amount: 0,
                 status: 'active',
-                created_at: now.toISOString()
+                created_at: now.toISOString(),
+                supabase_id: null
             };
             
             challenges.unshift(challenge);
-            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
             
             if (supabaseClient) {
                 try {
-                    await supabaseClient.from('challenges').insert({
+                    const { data, error } = await supabaseClient.from('challenges').insert({
                         user_id: userId,
                         category: category,
                         start_date: challenge.start_date,
                         end_date: challenge.end_date,
                         saved_amount: 0,
                         status: 'active'
-                    });
+                    }).select();
+                    
+                    if (error) throw error;
+                    
+                    if (data && data[0]) {
+                        challenge.supabase_id = data[0].id;
+                        challenge.id = data[0].id;
+                        challenge.local_id = data[0].id;
+                    }
                 } catch(e) {
                     console.log('Supabase challenge insert failed:', e.message);
                 }
             }
             
-            // Wyślij powiadomienie EmailJS
+            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+            
+            // EmailJS
             if (userSettings.email) {
                 try {
                     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
@@ -880,18 +926,12 @@
             const now = new Date();
             challenges.forEach(c => {
                 if (c.status === 'active' && c.category === category) {
-                    // Użytkownik złamał wyzwanie!
                     c.status = 'failed';
                     showToast(`💀 Wyzwanie ${c.category} ZBITE! Wydano ${amount} zł.`, 'error', 5000);
-                } else if (c.status === 'active' && c.category !== category) {
-                    // Zaoszczędził na innej kategorii - liczymy jako oszczędność
-                    // ( uproszczone - w prawdziwej wersji liczylibyśmy średnią z poprzednich tygodni)
                 }
             });
             
-            // Aktualizuj zaoszczędzone w aktywnych wyzwaniach
             challenges.filter(c => c.status === 'active').forEach(c => {
-                // Szacujemy oszczędność jako średni wydatek z poprzednich 7 dni minus 0
                 const weekAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
                 const prevWeek = expenses.filter(e => {
                     const d = new Date(e.date);
@@ -997,18 +1037,23 @@
             return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
         }
 
-        function resetAllData() {
+        async function resetAllData() {
             if (!confirm('RESETUJESZ WSZYSTKIE DANE.\n\nWydatki, wyzwania, wszystko.\n\nJesteś pewien?')) return;
+            
+            // Usuń z Supabase
+            if (supabaseClient) {
+                try {
+                    await supabaseClient.from('expenses').delete().eq('user_id', userId);
+                    await supabaseClient.from('challenges').delete().eq('user_id', userId);
+                } catch(e) {
+                    console.log('Supabase reset failed:', e.message);
+                }
+            }
             
             expenses = [];
             challenges = [];
             localStorage.removeItem('oddech_expenses');
             localStorage.removeItem('oddech_challenges');
-            
-            if (supabaseClient) {
-                supabaseClient.from('expenses').delete().eq('user_id', userId).then(() => {});
-                supabaseClient.from('challenges').delete().eq('user_id', userId).then(() => {});
-            }
             
             renderExpenses();
             renderChallenges();
@@ -1020,3 +1065,5 @@
     </script>
 </body>
 </html>'''
+
+
