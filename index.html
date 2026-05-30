@@ -29,6 +29,10 @@
         .expense-item { animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
         .filter-btn.active { background: #10b981 !important; color: white !important; }
+        .sync-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+        .sync-ok { background: #10b98133; color: #10b981; }
+        .sync-off { background: #ef444433; color: #ef4444; }
+        .sync-local { background: #f59e0b33; color: #f59e0b; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -44,7 +48,8 @@
                     <p class="text-xs text-zinc-500 -mt-1">Dość bycia wydymanym</p>
                 </div>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
+                <span id="syncStatus" class="sync-status sync-local">LOCAL</span>
                 <div class="hidden sm:flex items-center gap-2 bg-zinc-900 rounded-xl px-4 py-2 border border-zinc-800">
                     <i class="fas fa-user-secret text-emerald-500"></i>
                     <span class="text-sm text-zinc-400">ID:</span>
@@ -331,21 +336,23 @@
         let userId = '';
         let currentFilter = 'all';
         let comparisonChart = null;
+        let supabaseConnected = false;
 
         // ==================== INICJALIZACJA ====================
         document.addEventListener('DOMContentLoaded', async function() {
             // Inicjalizacja Supabase
             try {
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log('✅ Supabase connected');
+                console.log('✅ Supabase client created');
             } catch(e) {
                 console.error('❌ Supabase init error:', e);
+                updateSyncStatus('off');
             }
 
             // Inicjalizacja EmailJS
             try {
                 emailjs.init(EMAILJS_PUBLIC_KEY);
-                console.log('✅ EmailJS connected');
+                console.log('✅ EmailJS initialized');
             } catch(e) {
                 console.error('❌ EmailJS init error:', e);
             }
@@ -379,6 +386,23 @@
             document.getElementById('expenseAmount').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
             document.getElementById('expenseDesc').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
         });
+
+        function updateSyncStatus(status) {
+            const el = document.getElementById('syncStatus');
+            if (status === 'ok') {
+                el.textContent = 'SYNC';
+                el.className = 'sync-status sync-ok';
+                supabaseConnected = true;
+            } else if (status === 'local') {
+                el.textContent = 'LOCAL';
+                el.className = 'sync-status sync-local';
+                supabaseConnected = false;
+            } else {
+                el.textContent = 'OFFLINE';
+                el.className = 'sync-status sync-off';
+                supabaseConnected = false;
+            }
+        }
 
         // ==================== USTAWIENIA ====================
         function loadSettings() {
@@ -425,7 +449,7 @@
                 try { expenses = JSON.parse(local); } catch(e) { expenses = []; }
             }
 
-            // Potem sync z Supabase
+            // Potem sync z Supabase — z obsługą błędów RLS
             if (supabaseClient) {
                 try {
                     console.log('📤 Zapytanie Supabase dla user_id:', userId);
@@ -436,8 +460,14 @@
                         .order('created_at', { ascending: false });
                     
                     if (error) {
-                        console.error('❌ Supabase select error:', error);
-                        throw error;
+                        console.error('❌ Supabase select error:', error.message);
+                        if (error.message.includes('row-level security') || error.message.includes('401')) {
+                            console.warn('⚠️ RLS blokuje dostęp. Używam localStorage.');
+                            updateSyncStatus('local');
+                        } else {
+                            updateSyncStatus('off');
+                        }
+                        return;
                     }
                     
                     if (data && data.length > 0) {
@@ -454,12 +484,17 @@
                             supabase_id: d.id
                         }));
                         localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+                        updateSyncStatus('ok');
                     } else {
                         console.log('📭 Brak danych w Supabase dla tego usera');
+                        updateSyncStatus('ok');
                     }
                 } catch(e) {
                     console.log('⚠️ Supabase sync failed, using local:', e.message);
+                    updateSyncStatus('local');
                 }
+            } else {
+                updateSyncStatus('off');
             }
         }
 
@@ -500,9 +535,10 @@
             
             // Dodaj do lokalnej listy
             expenses.unshift(expense);
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
             // Sync z Supabase — NIE wysyłamy id, Supabase generuje uuid sam
-            if (supabaseClient) {
+            if (supabaseClient && supabaseConnected) {
                 try {
                     const { data, error } = await supabaseClient.from('expenses').insert({
                         user_id: userId,
@@ -513,22 +549,24 @@
                     }).select();
                     
                     if (error) {
-                        console.error('❌ Supabase insert error:', error);
-                        throw error;
-                    }
-                    
-                    if (data && data[0]) {
+                        console.error('❌ Supabase insert error:', error.message);
+                        if (error.message.includes('row-level security') || error.message.includes('401')) {
+                            console.warn('⚠️ RLS blokuje insert. Zapisano tylko lokalnie.');
+                            updateSyncStatus('local');
+                        }
+                    } else if (data && data[0]) {
                         expense.supabase_id = data[0].id;
                         expense.id = data[0].id;
                         expense.local_id = data[0].id;
+                        localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
                         console.log('✅ Zapisano w Supabase, ID:', data[0].id);
+                        updateSyncStatus('ok');
                     }
                 } catch(e) {
                     console.log('⚠️ Supabase insert failed:', e.message);
+                    updateSyncStatus('local');
                 }
             }
-            
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
             
             // Sprawdź wyzwania
             checkChallengesAfterExpense(category, amount);
@@ -565,8 +603,8 @@
             
             const expense = expenses.find(e => e.id === id || e.local_id === id);
             
-            // Usuń z Supabase po supabase_id (UUID)
-            if (supabaseClient && expense && expense.supabase_id) {
+            // Usuń z Supabase po supabase_id (UUID) — tylko jeśli mamy połączenie
+            if (supabaseClient && supabaseConnected && expense && expense.supabase_id) {
                 try {
                     const { error } = await supabaseClient
                         .from('expenses')
@@ -574,7 +612,10 @@
                         .eq('id', expense.supabase_id);
                     
                     if (error) {
-                        console.error('❌ Supabase delete error:', error);
+                        console.error('❌ Supabase delete error:', error.message);
+                        if (error.message.includes('row-level security') || error.message.includes('401')) {
+                            updateSyncStatus('local');
+                        }
                     } else {
                         console.log('✅ Usunięto z Supabase:', expense.supabase_id);
                     }
@@ -828,7 +869,7 @@
                 try { challenges = JSON.parse(local); } catch(e) { challenges = []; }
             }
             
-            if (supabaseClient) {
+            if (supabaseClient && supabaseConnected) {
                 try {
                     const { data, error } = await supabaseClient
                         .from('challenges')
@@ -836,7 +877,11 @@
                         .eq('user_id', userId)
                         .order('created_at', { ascending: false });
                     
-                    if (error) throw error;
+                    if (error) {
+                        console.error('❌ Supabase challenges select error:', error.message);
+                        return;
+                    }
+                    
                     if (data && data.length > 0) {
                         challenges = data.map(d => ({
                             id: d.id,
@@ -890,8 +935,9 @@
             };
             
             challenges.unshift(challenge);
+            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
             
-            if (supabaseClient) {
+            if (supabaseClient && supabaseConnected) {
                 try {
                     const { data, error } = await supabaseClient.from('challenges').insert({
                         user_id: userId,
@@ -902,32 +948,41 @@
                         status: 'active'
                     }).select();
                     
-                    if (error) throw error;
-                    
-                    if (data && data[0]) {
+                    if (error) {
+                        console.error('❌ Supabase challenge insert error:', error.message);
+                        if (error.message.includes('row-level security') || error.message.includes('401')) {
+                            updateSyncStatus('local');
+                        }
+                    } else if (data && data[0]) {
                         challenge.supabase_id = data[0].id;
                         challenge.id = data[0].id;
                         challenge.local_id = data[0].id;
+                        localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
                     }
                 } catch(e) {
                     console.log('Supabase challenge insert failed:', e.message);
                 }
             }
             
-            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
-            
-            if (userSettings.email) {
+            // EmailJS — tylko jeśli mamy email i połączenie
+            if (userSettings.email && userSettings.email.includes('@')) {
                 try {
-                    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                    const templateParams = {
                         to_email: userSettings.email,
                         challenge_category: category,
                         days_remaining: '7',
                         saved_so_far: '0.00 zł',
                         end_date: endDate.toLocaleDateString('pl-PL')
-                    });
+                    };
+                    console.log('📧 Wysyłam EmailJS:', templateParams);
+                    const result = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+                    console.log('✅ EmailJS wysłane:', result.status, result.text);
                 } catch(e) {
-                    console.log('EmailJS failed:', e.message);
+                    console.error('❌ EmailJS failed:', e);
+                    // Nie pokazuj błędu użytkownikowi — to tylko powiadomienie
                 }
+            } else {
+                console.log('📭 Brak emaila w ustawieniach — pomijam powiadomienie');
             }
             
             renderChallenges();
@@ -1053,7 +1108,7 @@
         async function resetAllData() {
             if (!confirm('RESETUJESZ WSZYSTKIE DANE.\n\nWydatki, wyzwania, wszystko.\n\nJesteś pewien?')) return;
             
-            if (supabaseClient) {
+            if (supabaseClient && supabaseConnected) {
                 try {
                     await supabaseClient.from('expenses').delete().eq('user_id', userId);
                     await supabaseClient.from('challenges').delete().eq('user_id', userId);
@@ -1077,5 +1132,7 @@
     </script>
 </body>
 </html>'''
+
+
 
 
