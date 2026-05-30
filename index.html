@@ -1134,30 +1134,6 @@
 </body>
 </html>'''
 
-with open('/mnt/agents/output/oddech_2.0_rls_fix.html', 'w', encoding='utf-8') as f:
-    f.write(html_v3)
-
-print("✅ Zapisano ODDECH 2.0 z poprawką RLS + EmailJS")
-print(f"Rozmiar: {len(html_v3)} znaków")
-print("\n🔧 GŁÓWNE ZMIANY:")
-print("1. Dodano wskaźnik SYNC/LOCAL/OFFLINE w nawigacji")
-print("2. Jeśli RLS blokuje — app działa na localStorage bez błędów")
-print("3. EmailJS: sprawdza czy email jest ustawiony i poprawny")
-print("4. Lepsze logi w konsoli do debugowania")
-print("\n📋 ABY WŁĄCZYĆ SYNC Z SUPABASE, WYKONAJ W SQL EDITOR:")
-print("""
--- Wyłącz RLS (szybkie rozwiązanie, mniej bezpieczne):
-ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
-ALTER TABLE challenges DISABLE ROW LEVEL SECURITY;
-
--- ALBO dodaj polityki dla anon (bezpieczniejsze):
-CREATE POLICY "anon_select_expenses" ON expenses FOR SELECT TO anon USING (true);
-CREATE POLICY "anon_insert_expenses" ON expenses FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "anon_delete_expenses" ON expenses FOR DELETE TO anon USING (true);
-CREATE POLICY "anon_select_challenges" ON challenges FOR SELECT TO anon USING (true);
-CREATE POLICY "anon_insert_challenges" ON challenges FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "anon_delete_challenges" ON challenges FOR DELETE TO anon USING (true);
-""")
 
 
 
