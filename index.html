@@ -1,4 +1,8 @@
-<!DOCTYPE html>
+
+# Opcja B: user_id jako prawdziwy UUID v4
+# Generujemy UUID w JS zamiast losowego stringa
+
+html_v2 = '''<!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
@@ -309,6 +313,20 @@
         const EMAILJS_TEMPLATE_ID = 'template_gz2brlg';
         const EMAILJS_PUBLIC_KEY = 'XLc3EHKvNjMA4X6jC';
 
+        // ==================== UUID GENERATOR (v4) ====================
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function isValidUUID(str) {
+            const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            return regex.test(str);
+        }
+
         // ==================== GLOBALNE ZMIENNE ====================
         let supabaseClient = null;
         let expenses = [];
@@ -336,13 +354,16 @@
                 console.error('❌ EmailJS init error:', e);
             }
 
-            // Generuj lub pobierz user ID
+            // Generuj lub pobierz user ID — TERAZ PRAWDZIWY UUID v4
             userId = localStorage.getItem('oddech_user_id');
-            if (!userId) {
-                userId = 'user_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+            if (!userId || !isValidUUID(userId)) {
+                userId = generateUUID();
                 localStorage.setItem('oddech_user_id', userId);
+                console.log('🆕 Nowy UUID:', userId);
+            } else {
+                console.log('👤 Istniejący UUID:', userId);
             }
-            document.getElementById('userIdDisplay').textContent = userId.substring(0, 12) + '...';
+            document.getElementById('userIdDisplay').textContent = userId.substring(0, 8) + '...';
 
             // Pobierz ustawienia
             loadSettings();
@@ -411,6 +432,7 @@
             // Potem sync z Supabase
             if (supabaseClient) {
                 try {
+                    console.log('📤 Zapytanie Supabase dla user_id:', userId);
                     const { data, error } = await supabaseClient
                         .from('expenses')
                         .select('*')
@@ -418,15 +440,15 @@
                         .order('created_at', { ascending: false });
                     
                     if (error) {
-                        console.error('Supabase select error:', error);
+                        console.error('❌ Supabase select error:', error);
                         throw error;
                     }
                     
                     if (data && data.length > 0) {
                         console.log('📥 Pobrano z Supabase:', data.length, 'wierszy');
                         expenses = data.map(d => ({
-                            local_id: d.id,  // UUID z Supabase
-                            id: d.id,        // dla kompatybilności
+                            local_id: d.id,
+                            id: d.id,
                             user_id: d.user_id,
                             amount: parseFloat(d.amount),
                             description: d.description,
@@ -500,10 +522,9 @@
                     }
                     
                     if (data && data[0]) {
-                        // Zapisz supabase_id do lokalnego obiektu
                         expense.supabase_id = data[0].id;
-                        expense.local_id = data[0].id;
                         expense.id = data[0].id;
+                        expense.local_id = data[0].id;
                         console.log('✅ Zapisano w Supabase, ID:', data[0].id);
                     }
                 } catch(e) {
@@ -666,7 +687,6 @@
             document.getElementById('activeChallenges').textContent = challenges.filter(c => c.status === 'active').length + ' aktywnych wyzwań';
             document.getElementById('avgHoursToday').textContent = avgHours + 'h';
             
-            // Stawka wolności
             const hoursToday = totalToday / userSettings.hourly_rate;
             const hoursMonth = expenses.filter(e => {
                 const d = new Date(e.date);
@@ -676,7 +696,6 @@
             document.getElementById('hoursWorkedToday').textContent = formatHours(hoursToday);
             document.getElementById('hoursWorkedMonth').textContent = formatHours(hoursMonth);
             
-            // Kumulacja (projection)
             const monthlyAvg = expenses.length > 0 ? 
                 expenses.reduce((sum, e) => sum + e.amount, 0) / Math.max(1, expenses.length) * 30 : 0;
             const yearProjection = monthlyAvg * 12 * 1.05;
@@ -840,7 +859,6 @@
                 }
             }
             
-            // Sprawdź czy wyzwania się zakończyły
             const now = new Date();
             challenges.forEach(c => {
                 if (c.status === 'active' && new Date(c.end_date) < now) {
@@ -902,7 +920,6 @@
             
             localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
             
-            // EmailJS
             if (userSettings.email) {
                 try {
                     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
@@ -1040,7 +1057,6 @@
         async function resetAllData() {
             if (!confirm('RESETUJESZ WSZYSTKIE DANE.\n\nWydatki, wyzwania, wszystko.\n\nJesteś pewien?')) return;
             
-            // Usuń z Supabase
             if (supabaseClient) {
                 try {
                     await supabaseClient.from('expenses').delete().eq('user_id', userId);
@@ -1066,4 +1082,17 @@
 </body>
 </html>'''
 
+with open('/mnt/agents/output/oddech_2.0_uuid.html', 'w', encoding='utf-8') as f:
+    f.write(html_v2)
 
+print("✅ Zapisano ODDECH 2.0 z UUID v4")
+print(f"Rozmiar: {len(html_v2)} znaków")
+print("\n🔧 ZMIANY:")
+print("1. generateUUID() — prawdziwy UUID v4 (xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)")
+print("2. isValidUUID() — walidacja formatu")
+print("3. Przy starcie: jeśli stary ID nie jest UUID → generuje nowy")
+print("4. user_id w Supabase pasuje do typu uuid")
+print("\n⚠️ WAŻNE:")
+print("Jeśli masz stare dane w Supabase ze starym user_id,")
+print("one zostaną 'osierocone' (stary user_id to nie UUID).")
+print("Możesz albo wyczyścić tabele, albo zmienić typ kolumny na text.")
