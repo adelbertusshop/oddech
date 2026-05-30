@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -8,21 +7,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <style>
         body { background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', system-ui, sans-serif; }
         .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .card:hover { transform: translateY(-4px); border-color: #10b981; }
         .brutal-btn { transition: all 0.15s; }
         .brutal-btn:active { transform: scale(0.96); }
-        .glass { background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(12px); }
         .gradient-text { background: linear-gradient(135deg, #10b981, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         .janusz-alert { animation: pulse-red 2s infinite; }
         .slide-in { animation: slideIn 0.4s ease-out; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .progress-ring { transition: stroke-dashoffset 0.5s ease; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -30,10 +25,9 @@
         .expense-item { animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
         .filter-btn.active { background: #10b981 !important; color: white !important; }
-        .sync-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
-        .sync-ok { background: #10b98133; color: #10b981; }
-        .sync-off { background: #ef444433; color: #ef4444; }
-        .sync-local { background: #f59e0b33; color: #f59e0b; }
+        .challenge-card { border-left: 3px solid #10b981; }
+        .challenge-card.failed { border-left-color: #ef4444; }
+        .challenge-card.completed { border-left-color: #3b82f6; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -50,12 +44,13 @@
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                <span id="syncStatus" class="sync-status sync-local">LOCAL</span>
-                <div class="hidden sm:flex items-center gap-2 bg-zinc-900 rounded-xl px-4 py-2 border border-zinc-800">
-                    <i class="fas fa-user-secret text-emerald-500"></i>
-                    <span class="text-sm text-zinc-400">ID:</span>
-                    <span id="userIdDisplay" class="text-sm font-mono text-emerald-400">...</span>
-                </div>
+                <button onclick="exportData()" class="brutal-btn hidden sm:flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white px-3 py-2 rounded-xl text-sm border border-zinc-700">
+                    <i class="fas fa-download"></i> Eksport
+                </button>
+                <label class="brutal-btn hidden sm:flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white px-3 py-2 rounded-xl text-sm border border-zinc-700 cursor-pointer">
+                    <i class="fas fa-upload"></i> Import
+                    <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(this)">
+                </label>
                 <button onclick="showSettings()" class="brutal-btn w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-xl flex items-center justify-center border border-zinc-700">
                     <i class="fas fa-cog text-zinc-400"></i>
                 </button>
@@ -235,6 +230,10 @@
                             class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
                             <i class="fas fa-fire mr-2"></i> STARTUJ WYZWANIE
                         </button>
+                        <button onclick="requestNotifications()" id="notifBtn"
+                            class="brutal-btn w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white font-semibold py-2 rounded-xl text-sm border border-zinc-700">
+                            <i class="fas fa-bell mr-2"></i> Włącz powiadomienia
+                        </button>
                     </div>
                     
                     <div id="challengesList" class="space-y-3 max-h-64 overflow-y-auto">
@@ -287,10 +286,28 @@
                     <input type="number" id="settingsRate" step="0.5" 
                         class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
                 </div>
-                <div>
-                    <label class="text-sm text-zinc-400 mb-2 block">Email (do powiadomień)</label>
-                    <input type="email" id="settingsEmail" placeholder="twoj@email.pl" 
-                        class="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500">
+                <div class="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-zinc-400">Powiadomienia przeglądarki</span>
+                        <span id="notifStatus" class="text-xs text-zinc-500">nie włączone</span>
+                    </div>
+                    <button onclick="requestNotifications()" 
+                        class="brutal-btn w-full bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-semibold py-2 rounded-xl text-sm border border-blue-500/30">
+                        <i class="fas fa-bell mr-2"></i> Włącz powiadomienia
+                    </button>
+                </div>
+                <div class="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
+                    <div class="text-sm text-zinc-400 mb-2">Backup danych</div>
+                    <div class="flex gap-2">
+                        <button onclick="exportData()" 
+                            class="brutal-btn flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-semibold py-2 rounded-xl text-sm border border-emerald-500/30">
+                            <i class="fas fa-download mr-1"></i> Eksport JSON
+                        </button>
+                        <label class="brutal-btn flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 font-semibold py-2 rounded-xl text-sm border border-blue-500/30 cursor-pointer text-center">
+                            <i class="fas fa-upload mr-1"></i> Import JSON
+                            <input type="file" accept=".json" class="hidden" onchange="importData(this)">
+                        </label>
+                    </div>
                 </div>
                 <button onclick="saveSettings()" 
                     class="brutal-btn w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl">
@@ -308,101 +325,173 @@
     <div id="toastContainer" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 space-y-2"></div>
 
     <script>
-        // ==================== KONFIGURACJA ====================
-        const SUPABASE_URL = 'https://ofsxuoujixgndkbavlim.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_VqLAfNEa1f3y-tINO7OYpA_KmtqCO4r';
-        const EMAILJS_SERVICE_ID = 'service_t2o52p5';
-        const EMAILJS_TEMPLATE_ID = 'template_gz2brlg';
-        const EMAILJS_PUBLIC_KEY = 'XLc3EHKvNjMA4X6jC';
-
-        // ==================== UUID GENERATOR (v4) ====================
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = Math.random() * 16 | 0;
-                const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-        }
-
-        function isValidUUID(str) {
-            const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            return regex.test(str);
-        }
-
         // ==================== GLOBALNE ZMIENNE ====================
-        let supabaseClient = null;
         let expenses = [];
         let challenges = [];
-        let userSettings = { hourly_rate: 25, email: '' };
-        let userId = '';
+        let userSettings = { hourly_rate: 25 };
         let currentFilter = 'all';
         let comparisonChart = null;
-        let supabaseConnected = false;
+        let notificationsEnabled = false;
 
         // ==================== INICJALIZACJA ====================
-        document.addEventListener('DOMContentLoaded', async function() {
-            // Inicjalizacja Supabase
-            try {
-                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                console.log('✅ Supabase client created');
-            } catch(e) {
-                console.error('❌ Supabase init error:', e);
-                updateSyncStatus('off');
-            }
-
-            // Inicjalizacja EmailJS
-            try {
-                emailjs.init(EMAILJS_PUBLIC_KEY);
-                console.log('✅ EmailJS initialized');
-            } catch(e) {
-                console.error('❌ EmailJS init error:', e);
-            }
-
-            // Generuj lub pobierz user ID — TERAZ PRAWDZIWY UUID v4
-            userId = localStorage.getItem('oddech_user_id');
-            if (!userId || !isValidUUID(userId)) {
-                userId = generateUUID();
-                localStorage.setItem('oddech_user_id', userId);
-                console.log('🆕 Nowy UUID:', userId);
-            } else {
-                console.log('👤 Istniejący UUID:', userId);
-            }
-            document.getElementById('userIdDisplay').textContent = userId.substring(0, 8) + '...';
-
-            // Pobierz ustawienia
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
             loadSettings();
-            
-            // Pobierz dane
-            await loadExpenses();
-            await loadChallenges();
-            
-            // Renderuj
             renderExpenses();
             renderChallenges();
             updateStats();
             renderComparisonChart();
             checkJanuszAlert();
+            checkNotificationStatus();
 
             // Event listeners
             document.getElementById('expenseAmount').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
             document.getElementById('expenseDesc').addEventListener('keypress', e => { if(e.key === 'Enter') addExpense(); });
+
+            // Sprawdź wyzwania co minutę (do powiadomień)
+            setInterval(checkChallengeNotifications, 60000);
         });
 
-        function updateSyncStatus(status) {
-            const el = document.getElementById('syncStatus');
-            if (status === 'ok') {
-                el.textContent = 'SYNC';
-                el.className = 'sync-status sync-ok';
-                supabaseConnected = true;
-            } else if (status === 'local') {
-                el.textContent = 'LOCAL';
-                el.className = 'sync-status sync-local';
-                supabaseConnected = false;
-            } else {
-                el.textContent = 'OFFLINE';
-                el.className = 'sync-status sync-off';
-                supabaseConnected = false;
+        // ==================== POWIADOMIENIA ====================
+        async function requestNotifications() {
+            if (!('Notification' in window)) {
+                showToast('Twoja przeglądarka nie wspiera powiadomień', 'error');
+                return;
             }
+            
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                notificationsEnabled = true;
+                showToast('🔔 Powiadomienia włączone!', 'success');
+                checkNotificationStatus();
+                new Notification('ODDECH 2.0', {
+                    body: 'Powiadomienia działają! Będziemy Cię pilnować.',
+                    icon: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/svgs/solid/bolt.svg'
+                });
+            } else {
+                showToast('Powiadomienia zablokowane. Włącz w ustawieniach przeglądarki.', 'error');
+            }
+        }
+
+        function checkNotificationStatus() {
+            const statusEl = document.getElementById('notifStatus');
+            const btnEl = document.getElementById('notifBtn');
+            
+            if (!('Notification' in window)) {
+                if (statusEl) statusEl.textContent = 'nieobsługiwane';
+                if (btnEl) btnEl.style.display = 'none';
+                return;
+            }
+            
+            if (Notification.permission === 'granted') {
+                notificationsEnabled = true;
+                if (statusEl) statusEl.textContent = 'włączone ✅';
+                if (statusEl) statusEl.className = 'text-xs text-emerald-500';
+                if (btnEl) {
+                    btnEl.innerHTML = '<i class="fas fa-check mr-2"></i> Powiadomienia aktywne';
+                    btnEl.className = 'brutal-btn w-full bg-emerald-600/20 text-emerald-400 font-semibold py-2 rounded-xl text-sm border border-emerald-500/30 cursor-default';
+                    btnEl.onclick = null;
+                }
+            } else if (Notification.permission === 'denied') {
+                if (statusEl) statusEl.textContent = 'zablokowane ❌';
+                if (statusEl) statusEl.className = 'text-xs text-red-500';
+            }
+        }
+
+        function checkChallengeNotifications() {
+            if (!notificationsEnabled) return;
+            
+            const now = new Date();
+            challenges.filter(c => c.status === 'active').forEach(c => {
+                const end = new Date(c.end_date);
+                const daysLeft = Math.ceil((end - now) / (24 * 60 * 60 * 1000));
+                
+                // Powiadomienie w ostatnim dniu
+                if (daysLeft === 1 && !c.notified_1day) {
+                    c.notified_1day = true;
+                    saveData();
+                    new Notification('🔥 ODDECH — Wyzwanie', {
+                        body: `Jeszcze 1 dzień bez ${c.category}! Trzymaj się!`,
+                        tag: 'challenge_1day_' + c.id
+                    });
+                }
+                
+                // Powiadomienie gdy zakończone
+                if (daysLeft <= 0 && !c.notified_done) {
+                    c.notified_done = true;
+                    c.status = 'completed';
+                    saveData();
+                    new Notification('🏆 ODDECH — Sukces!', {
+                        body: `Wyzwanie bez ${c.category} zakończone! Zaoszczędziłeś ${(c.saved_amount || 0).toFixed(2)} zł!`,
+                        tag: 'challenge_done_' + c.id
+                    });
+                    renderChallenges();
+                    updateStats();
+                }
+            });
+        }
+
+        // ==================== LOCALSTORAGE ====================
+        function loadData() {
+            const exp = localStorage.getItem('oddech_expenses');
+            const chal = localStorage.getItem('oddech_challenges');
+            if (exp) { try { expenses = JSON.parse(exp); } catch(e) { expenses = []; } }
+            if (chal) { try { challenges = JSON.parse(chal); } catch(e) { challenges = []; } }
+        }
+
+        function saveData() {
+            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+        }
+
+        // ==================== EKSPORT/IMPORT ====================
+        function exportData() {
+            const data = {
+                expenses: expenses,
+                challenges: challenges,
+                settings: userSettings,
+                exported_at: new Date().toISOString(),
+                version: '2.0'
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `oddech_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('💾 Backup zapisany!', 'success');
+        }
+
+        function importData(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.expenses) expenses = data.expenses;
+                    if (data.challenges) challenges = data.challenges;
+                    if (data.settings) {
+                        userSettings = data.settings;
+                        localStorage.setItem('oddech_settings', JSON.stringify(userSettings));
+                    }
+                    saveData();
+                    renderExpenses();
+                    renderChallenges();
+                    updateStats();
+                    renderComparisonChart();
+                    checkJanuszAlert();
+                    showToast('📥 Dane przywrócone!', 'success');
+                } catch(err) {
+                    showToast('❌ Błąd importu — zły format pliku', 'error');
+                }
+            };
+            reader.readAsText(file);
+            input.value = '';
         }
 
         // ==================== USTAWIENIA ====================
@@ -413,16 +502,15 @@
             }
             document.getElementById('hourlyRate').value = userSettings.hourly_rate;
             document.getElementById('settingsRate').value = userSettings.hourly_rate;
-            document.getElementById('settingsEmail').value = userSettings.email || '';
         }
 
         function saveSettings() {
             userSettings.hourly_rate = parseFloat(document.getElementById('settingsRate').value) || 25;
-            userSettings.email = document.getElementById('settingsEmail').value || '';
             localStorage.setItem('oddech_settings', JSON.stringify(userSettings));
             document.getElementById('hourlyRate').value = userSettings.hourly_rate;
             hideSettings();
             updateStats();
+            renderExpenses();
             showToast('Ustawienia zapisane!', 'success');
         }
 
@@ -430,11 +518,13 @@
             userSettings.hourly_rate = parseFloat(value) || 25;
             localStorage.setItem('oddech_settings', JSON.stringify(userSettings));
             updateStats();
+            renderExpenses();
         }
 
         function showSettings() {
             document.getElementById('settingsModal').classList.remove('hidden');
             document.getElementById('settingsModal').classList.add('flex');
+            checkNotificationStatus();
         }
 
         function hideSettings() {
@@ -443,63 +533,7 @@
         }
 
         // ==================== WYDATKI ====================
-        async function loadExpenses() {
-            // Najpierw localStorage (instant)
-            const local = localStorage.getItem('oddech_expenses');
-            if (local) {
-                try { expenses = JSON.parse(local); } catch(e) { expenses = []; }
-            }
-
-            // Potem sync z Supabase — z obsługą błędów RLS
-            if (supabaseClient) {
-                try {
-                    console.log('📤 Zapytanie Supabase dla user_id:', userId);
-                    const { data, error } = await supabaseClient
-                        .from('expenses')
-                        .select('*')
-                        .eq('user_id', userId)
-                        .order('created_at', { ascending: false });
-                    
-                    if (error) {
-                        console.error('❌ Supabase select error:', error.message);
-                        if (error.message.includes('row-level security') || error.message.includes('401')) {
-                            console.warn('⚠️ RLS blokuje dostęp. Używam localStorage.');
-                            updateSyncStatus('local');
-                        } else {
-                            updateSyncStatus('off');
-                        }
-                        return;
-                    }
-                    
-                    if (data && data.length > 0) {
-                        console.log('📥 Pobrano z Supabase:', data.length, 'wierszy');
-                        expenses = data.map(d => ({
-                            local_id: d.id,
-                            id: d.id,
-                            user_id: d.user_id,
-                            amount: parseFloat(d.amount),
-                            description: d.description,
-                            category: d.category,
-                            hours_of_work: d.hours_of_work ? parseFloat(d.hours_of_work) : null,
-                            date: d.created_at,
-                            supabase_id: d.id
-                        }));
-                        localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
-                        updateSyncStatus('ok');
-                    } else {
-                        console.log('📭 Brak danych w Supabase dla tego usera');
-                        updateSyncStatus('ok');
-                    }
-                } catch(e) {
-                    console.log('⚠️ Supabase sync failed, using local:', e.message);
-                    updateSyncStatus('local');
-                }
-            } else {
-                updateSyncStatus('off');
-            }
-        }
-
-        async function addExpense() {
+        function addExpense() {
             const amountInput = document.getElementById('expenseAmount');
             const descInput = document.getElementById('expenseDesc');
             const categorySelect = document.getElementById('expenseCategory');
@@ -520,70 +554,30 @@
             
             amount = Math.round(amount * 100) / 100;
             const hoursOfWork = (amount / userSettings.hourly_rate).toFixed(2);
-            const localId = 'exp_' + Date.now();
             
             const expense = {
-                local_id: localId,
-                id: localId,
-                user_id: userId,
+                id: 'exp_' + Date.now(),
                 amount: amount,
                 description: description,
                 category: category,
                 hours_of_work: parseFloat(hoursOfWork),
-                date: new Date().toISOString(),
-                supabase_id: null
+                date: new Date().toISOString()
             };
             
-            // Dodaj do lokalnej listy
             expenses.unshift(expense);
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
+            saveData();
             
-            // Sync z Supabase — NIE wysyłamy id, Supabase generuje uuid sam
-            if (supabaseClient && supabaseConnected) {
-                try {
-                    const { data, error } = await supabaseClient.from('expenses').insert({
-                        user_id: userId,
-                        amount: amount,
-                        description: description,
-                        category: category,
-                        hours_of_work: hoursOfWork
-                    }).select();
-                    
-                    if (error) {
-                        console.error('❌ Supabase insert error:', error.message);
-                        if (error.message.includes('row-level security') || error.message.includes('401')) {
-                            console.warn('⚠️ RLS blokuje insert. Zapisano tylko lokalnie.');
-                            updateSyncStatus('local');
-                        }
-                    } else if (data && data[0]) {
-                        expense.supabase_id = data[0].id;
-                        expense.id = data[0].id;
-                        expense.local_id = data[0].id;
-                        localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
-                        console.log('✅ Zapisano w Supabase, ID:', data[0].id);
-                        updateSyncStatus('ok');
-                    }
-                } catch(e) {
-                    console.log('⚠️ Supabase insert failed:', e.message);
-                    updateSyncStatus('local');
-                }
-            }
-            
-            // Sprawdź wyzwania
             checkChallengesAfterExpense(category, amount);
             
-            // Reset form
             amountInput.value = '';
             descInput.value = '';
             categorySelect.value = 'Jedzenie';
             
-            // Render
             renderExpenses();
             updateStats();
             renderComparisonChart();
             checkJanuszAlert();
             
-            // Feedback
             showBrutalFeedback(amount, description, category, hoursOfWork);
         }
 
@@ -599,36 +593,10 @@
             showToast(randomMsg, 'error', 4000);
         }
 
-        async function deleteExpense(id) {
+        function deleteExpense(id) {
             if (!confirm('Usunąć ten wpierdol finansowy?')) return;
-            
-            const expense = expenses.find(e => e.id === id || e.local_id === id);
-            
-            // Usuń z Supabase po supabase_id (UUID) — tylko jeśli mamy połączenie
-            if (supabaseClient && supabaseConnected && expense && expense.supabase_id) {
-                try {
-                    const { error } = await supabaseClient
-                        .from('expenses')
-                        .delete()
-                        .eq('id', expense.supabase_id);
-                    
-                    if (error) {
-                        console.error('❌ Supabase delete error:', error.message);
-                        if (error.message.includes('row-level security') || error.message.includes('401')) {
-                            updateSyncStatus('local');
-                        }
-                    } else {
-                        console.log('✅ Usunięto z Supabase:', expense.supabase_id);
-                    }
-                } catch(e) {
-                    console.log('⚠️ Supabase delete failed:', e.message);
-                }
-            }
-            
-            // Usuń lokalnie
-            expenses = expenses.filter(e => e.id !== id && e.local_id !== id);
-            localStorage.setItem('oddech_expenses', JSON.stringify(expenses));
-            
+            expenses = expenses.filter(e => e.id !== id);
+            saveData();
             renderExpenses();
             updateStats();
             renderComparisonChart();
@@ -672,7 +640,6 @@
             container.innerHTML = filtered.map(exp => {
                 const date = new Date(exp.date);
                 const hours = exp.hours_of_work || (exp.amount / userSettings.hourly_rate).toFixed(2);
-                const deleteId = exp.id || exp.local_id;
                 return `
                 <div class="expense-item bg-black/40 rounded-xl p-4 border-l-4 ${getCategoryColor(exp.category)} flex justify-between items-start hover:bg-zinc-800/50 transition">
                     <div class="flex-1 min-w-0">
@@ -686,7 +653,7 @@
                             <span class="text-zinc-600">${date.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                     </div>
-                    <button onclick="deleteExpense('${deleteId}')" class="text-red-500 hover:text-red-400 ml-3 flex-shrink-0">
+                    <button onclick="deleteExpense('${exp.id}')" class="text-red-500 hover:text-red-400 ml-3 flex-shrink-0">
                         <i class="fas fa-skull text-lg"></i>
                     </button>
                 </div>`;
@@ -864,52 +831,7 @@
         }
 
         // ==================== WYZWANIA ====================
-        async function loadChallenges() {
-            const local = localStorage.getItem('oddech_challenges');
-            if (local) {
-                try { challenges = JSON.parse(local); } catch(e) { challenges = []; }
-            }
-            
-            if (supabaseClient && supabaseConnected) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('challenges')
-                        .select('*')
-                        .eq('user_id', userId)
-                        .order('created_at', { ascending: false });
-                    
-                    if (error) {
-                        console.error('❌ Supabase challenges select error:', error.message);
-                        return;
-                    }
-                    
-                    if (data && data.length > 0) {
-                        challenges = data.map(d => ({
-                            id: d.id,
-                            user_id: d.user_id,
-                            category: d.category,
-                            start_date: d.start_date,
-                            end_date: d.end_date,
-                            saved_amount: parseFloat(d.saved_amount || 0),
-                            status: d.status,
-                            created_at: d.created_at
-                        }));
-                        localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
-                    }
-                } catch(e) {
-                    console.log('Supabase challenges failed:', e.message);
-                }
-            }
-            
-            const now = new Date();
-            challenges.forEach(c => {
-                if (c.status === 'active' && new Date(c.end_date) < now) {
-                    c.status = 'completed';
-                }
-            });
-        }
-
-        async function startChallenge() {
+        function startChallenge() {
             const category = document.getElementById('challengeCategory').value;
             
             const existing = challenges.find(c => c.category === category && c.status === 'active');
@@ -920,75 +842,33 @@
             
             const now = new Date();
             const endDate = new Date(now + 7 * 24 * 60 * 60 * 1000);
-            const localId = 'ch_' + Date.now();
             
             const challenge = {
-                local_id: localId,
-                id: localId,
-                user_id: userId,
+                id: 'ch_' + Date.now(),
                 category: category,
                 start_date: now.toISOString().split('T')[0],
                 end_date: endDate.toISOString().split('T')[0],
                 saved_amount: 0,
                 status: 'active',
                 created_at: now.toISOString(),
-                supabase_id: null
+                notified_1day: false,
+                notified_done: false
             };
             
             challenges.unshift(challenge);
-            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
-            
-            if (supabaseClient && supabaseConnected) {
-                try {
-                    const { data, error } = await supabaseClient.from('challenges').insert({
-                        user_id: userId,
-                        category: category,
-                        start_date: challenge.start_date,
-                        end_date: challenge.end_date,
-                        saved_amount: 0,
-                        status: 'active'
-                    }).select();
-                    
-                    if (error) {
-                        console.error('❌ Supabase challenge insert error:', error.message);
-                        if (error.message.includes('row-level security') || error.message.includes('401')) {
-                            updateSyncStatus('local');
-                        }
-                    } else if (data && data[0]) {
-                        challenge.supabase_id = data[0].id;
-                        challenge.id = data[0].id;
-                        challenge.local_id = data[0].id;
-                        localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
-                    }
-                } catch(e) {
-                    console.log('Supabase challenge insert failed:', e.message);
-                }
-            }
-            
-            // EmailJS — tylko jeśli mamy email i połączenie
-            if (userSettings.email && userSettings.email.includes('@')) {
-                try {
-                    const templateParams = {
-                        to_email: userSettings.email,
-                        challenge_category: category,
-                        days_remaining: '7',
-                        saved_so_far: '0.00 zł',
-                        end_date: endDate.toLocaleDateString('pl-PL')
-                    };
-                    console.log('📧 Wysyłam EmailJS:', templateParams);
-                    const result = await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
-                    console.log('✅ EmailJS wysłane:', result.status, result.text);
-                } catch(e) {
-                    console.error('❌ EmailJS failed:', e);
-                    // Nie pokazuj błędu użytkownikowi — to tylko powiadomienie
-                }
-            } else {
-                console.log('📭 Brak emaila w ustawieniach — pomijam powiadomienie');
-            }
+            saveData();
             
             renderChallenges();
             updateStats();
             showToast(`🔥 Wyzwanie 7-dniowe bez ${category} rozpoczęte!`, 'success');
+            
+            // Powiadomienie startowe
+            if (notificationsEnabled) {
+                new Notification('🔥 ODDECH — Wyzwanie start!', {
+                    body: `7 dni bez ${category}. Dasz radę!`,
+                    tag: 'challenge_start_' + challenge.id
+                });
+            }
         }
 
         function checkChallengesAfterExpense(category, amount) {
@@ -996,10 +876,20 @@
             challenges.forEach(c => {
                 if (c.status === 'active' && c.category === category) {
                     c.status = 'failed';
+                    
+                    // Powiadomienie o porażce
+                    if (notificationsEnabled) {
+                        new Notification('💀 ODDECH — Wyzwanie zbite!', {
+                            body: `Wydano ${amount} zł na ${category}. Wyzwanie przerwane.`,
+                            tag: 'challenge_fail_' + c.id
+                        });
+                    }
+                    
                     showToast(`💀 Wyzwanie ${c.category} ZBITE! Wydano ${amount} zł.`, 'error', 5000);
                 }
             });
             
+            // Aktualizuj zaoszczędzone w aktywnych
             challenges.filter(c => c.status === 'active').forEach(c => {
                 const weekAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
                 const prevWeek = expenses.filter(e => {
@@ -1010,7 +900,7 @@
                 c.saved_amount = (c.saved_amount || 0) + avgDaily;
             });
             
-            localStorage.setItem('oddech_challenges', JSON.stringify(challenges));
+            saveData();
             renderChallenges();
             updateStats();
         }
@@ -1035,7 +925,7 @@
                 const progress = Math.max(0, Math.min(100, ((7 - daysLeft) / 7) * 100));
                 
                 html += `
-                <div class="bg-black/50 rounded-xl p-4 border border-emerald-500/30">
+                <div class="challenge-card bg-black/50 rounded-xl p-4 border border-zinc-800/50">
                     <div class="flex justify-between items-start mb-2">
                         <div>
                             <span class="font-bold text-emerald-400">🔥 ${c.category}</span>
@@ -1052,17 +942,17 @@
             
             completed.forEach(c => {
                 html += `
-                <div class="bg-black/30 rounded-xl p-3 border border-zinc-800 opacity-70">
+                <div class="challenge-card completed bg-black/30 rounded-xl p-3 border border-zinc-800 opacity-70">
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-zinc-400">✅ ${c.category}</span>
-                        <span class="text-xs text-emerald-500 font-bold">+${(c.saved_amount || 0).toFixed(2)} zł</span>
+                        <span class="text-xs text-blue-400 font-bold">+${(c.saved_amount || 0).toFixed(2)} zł</span>
                     </div>
                 </div>`;
             });
             
             failed.forEach(c => {
                 html += `
-                <div class="bg-black/30 rounded-xl p-3 border border-red-900/30 opacity-60">
+                <div class="challenge-card failed bg-black/30 rounded-xl p-3 border border-zinc-800 opacity-60">
                     <div class="flex justify-between items-center">
                         <span class="text-sm text-zinc-500">💀 ${c.category}</span>
                         <span class="text-xs text-red-500">ZBITE</span>
@@ -1106,22 +996,14 @@
             return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
         }
 
-        async function resetAllData() {
+        function resetAllData() {
             if (!confirm('RESETUJESZ WSZYSTKIE DANE.\n\nWydatki, wyzwania, wszystko.\n\nJesteś pewien?')) return;
-            
-            if (supabaseClient && supabaseConnected) {
-                try {
-                    await supabaseClient.from('expenses').delete().eq('user_id', userId);
-                    await supabaseClient.from('challenges').delete().eq('user_id', userId);
-                } catch(e) {
-                    console.log('Supabase reset failed:', e.message);
-                }
-            }
-            localStorage.removeItem('oddech_expenses');
-            localStorage.removeItem('oddech_challenges');
             
             expenses = [];
             challenges = [];
+            localStorage.removeItem('oddech_expenses');
+            localStorage.removeItem('oddech_challenges');
+            
             renderExpenses();
             renderChallenges();
             updateStats();
@@ -1131,4 +1013,6 @@
         }
     </script>
 </body>
-</html>
+</html>'''
+
+
