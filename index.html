@@ -1117,12 +1117,11 @@
                     console.log('Supabase reset failed:', e.message);
                 }
             }
-            
-            expenses = [];
-            challenges = [];
             localStorage.removeItem('oddech_expenses');
             localStorage.removeItem('oddech_challenges');
             
+            expenses = [];
+            challenges = [];
             renderExpenses();
             renderChallenges();
             updateStats();
@@ -1132,9 +1131,4 @@
         }
     </script>
 </body>
-</html>'''
-
-
-
-
-
+</html>
