@@ -1,8 +1,4 @@
-
-# Opcja B: user_id jako prawdziwy UUID v4
-# Generujemy UUID w JS zamiast losowego stringa
-
-html_v2 = '''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
@@ -1082,17 +1078,4 @@ html_v2 = '''<!DOCTYPE html>
 </body>
 </html>'''
 
-with open('/mnt/agents/output/oddech_2.0_uuid.html', 'w', encoding='utf-8') as f:
-    f.write(html_v2)
 
-print("✅ Zapisano ODDECH 2.0 z UUID v4")
-print(f"Rozmiar: {len(html_v2)} znaków")
-print("\n🔧 ZMIANY:")
-print("1. generateUUID() — prawdziwy UUID v4 (xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx)")
-print("2. isValidUUID() — walidacja formatu")
-print("3. Przy starcie: jeśli stary ID nie jest UUID → generuje nowy")
-print("4. user_id w Supabase pasuje do typu uuid")
-print("\n⚠️ WAŻNE:")
-print("Jeśli masz stare dane w Supabase ze starym user_id,")
-print("one zostaną 'osierocone' (stary user_id to nie UUID).")
-print("Możesz albo wyczyścić tabele, albo zmienić typ kolumny na text.")
